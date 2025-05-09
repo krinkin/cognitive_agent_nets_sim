@@ -2,12 +2,12 @@ import asyncio
 import time
 import random
 
+# ----------------------------------------------------------------------
 class BaseAgent:
-    """Asynchronous agent with bounded lifetime and JSONL logging."""
     def __init__(self, name, inbox, outboxes, log, lifetime=30.0):
         self.name = name
         self.inbox = inbox
-        self.outboxes = outboxes          # dict name -> queue
+        self.outboxes = outboxes        # dict name -> queue
         self.log = log
         self.lifetime = lifetime
         self.t0 = None
@@ -33,7 +33,7 @@ class BaseAgent:
                 await asyncio.sleep(0.02)
         self.log('terminated', agent=self.name)
 
-    async def idle(self):          # subclasses may override
+    async def idle(self):
         pass
 
     async def receive(self, sender, msg):
@@ -42,11 +42,11 @@ class BaseAgent:
 
 # ----------------------------------------------------------------------
 class GeneratorAgent(BaseAgent):
-    """Produces candidate 4-digit codes."""
+    """Генератор 4-значных кодов."""
     def __init__(self, *a,
                  buffer_size=25,
                  preferred_digit=None,
-                 force_semantic=False,     # ← always embeds “07”
+                 force_semantic=True,      # всегда содержит ‘07’
                  **kw):
         super().__init__(*a, **kw)
         self.buffer_size = buffer_size
@@ -54,22 +54,20 @@ class GeneratorAgent(BaseAgent):
         self.preferred_digit = preferred_digit
         self.force_semantic = force_semantic
 
-    # ----------------------------------------------------------
     def _new_code(self) -> str:
         digits = list(random.choices('0123456789', k=4))
 
-        # Always satisfy semantic constraint (“07” substring)
+        # делаем семантическое условие истинным
         if self.force_semantic:
-            pos = random.randrange(3)      # 07?? | ?07? | ??07
+            pos = random.randrange(3)          # 07?? | ?07? | ??07
             digits[pos], digits[pos + 1] = '0', '7'
 
-        # Optional bias: randomly inject preferred_digit
-        if self.preferred_digit and random.random() < 0.50:
+        # bias первой цифры
+        if self.preferred_digit and random.random() < 0.5:
             digits[random.randrange(4)] = self.preferred_digit
 
         return ''.join(digits)
 
-    # ----------------------------------------------------------
     async def idle(self):
         if len(self.buffer) < self.buffer_size:
             code = self._new_code()
@@ -89,7 +87,7 @@ class GeneratorAgent(BaseAgent):
 
 # ----------------------------------------------------------------------
 class CheckerAgent(BaseAgent):
-    """Returns ✓ / ✗ for one candidate code."""
+    """Проверяет одно правило constraint(code) → ✓/✗."""
     def __init__(self, *a, constraint, **kw):
         super().__init__(*a, **kw)
         self.constraint = constraint
@@ -103,18 +101,18 @@ class CheckerAgent(BaseAgent):
 
 # ----------------------------------------------------------------------
 class StrategistAgent(BaseAgent):
-    """Keeps score table and decides when to CONFIRM."""
+    """Ведёт таблицу очков; подтверждает, когда набрано threshold очков."""
     def __init__(self, *a,
                  top_k=10,
-                 threshold=1,          # ← confirm on first ✓
-                 human_interval=10,
+                 threshold=2,          # нужно хотя бы 2 очка
+                 human_interval=2,     # каждые 2 хода отправляем Human
                  **kw):
         super().__init__(*a, **kw)
         self.scores = {}
         self.top_k = top_k
         self.threshold = threshold
-        self.counter = 0
         self.human_interval = human_interval
+        self.counter = 0
 
     def _best(self, k=3):
         return sorted(self.scores.items(), key=lambda kv: -kv[1])[:k]
@@ -124,7 +122,7 @@ class StrategistAgent(BaseAgent):
         if self.counter % self.human_interval == 0:
             best = [c for c, _ in self._best()]
             if best:
-                await self.send('Human', 'TOP ' + ' '.join(best[:3]))
+                await self.send('Human', 'TOP ' + ' '.join(best))
 
     async def receive(self, sender, msg):
         parts = msg.split()

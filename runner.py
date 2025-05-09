@@ -8,8 +8,7 @@ from agents import GeneratorAgent, CheckerAgent, StrategistAgent
 from synthetic_human import SyntheticHuman
 from constraints import sample_constraints
 
-
-# ---------- JSONL logger ------------------------------------------------
+# ---------- JSONL-логгер ----------------------------------------------
 def make_logger(session: str, logdir: str):
     os.makedirs(logdir, exist_ok=True)
     path = os.path.join(logdir, f"{session}.jsonl")
@@ -24,19 +23,15 @@ def make_logger(session: str, logdir: str):
     return log, fh, path
 
 
-# ---------- single simulation ------------------------------------------
-async def run_once(session: str,
-                   include_human: bool,
-                   duration: int,
-                   logdir: str):
+# ---------- один запуск baseline / hybrid ------------------------------
+async def run_once(session: str, include_human: bool,
+                   duration: int, logdir: str):
     log, fh, path = make_logger(session, logdir)
 
-    # queues
     names = ["Generator", "Checker", "Strategist"] + (["Human"] if include_human else [])
     queues = {n: asyncio.Queue() for n in names}
-    outboxes = {n: queues for n in names}  # full mesh
+    outboxes = {n: queues for n in names}
 
-    # constraints
     funcs = sample_constraints()
     semantic = funcs[-1]
     formals  = funcs[:-1]
@@ -44,47 +39,23 @@ async def run_once(session: str,
     def constraint(code: str) -> bool:
         return all(f(code) for f in formals) and semantic(code)
 
-    # agents
     agents = [
-        GeneratorAgent(
-            "Generator",
-            queues["Generator"],
-            outboxes["Generator"],
-            log,
-            lifetime=duration / 2,
-            preferred_digit='0',
-            force_semantic=True,      # ← всегда содержит “07”
-        ),
-        CheckerAgent(
-            "Checker",
-            queues["Checker"],
-            outboxes["Checker"],
-            log,
-            constraint=constraint,
-            lifetime=duration / 2,
-        ),
-        StrategistAgent(
-            "Strategist",
-            queues["Strategist"],
-            outboxes["Strategist"],
-            log,
-            lifetime=duration / 2,
-            threshold=1,              # ← confirm на первом ✓
-        ),
+        GeneratorAgent("Generator", queues["Generator"], outboxes["Generator"],
+                       log, lifetime=duration/2,
+                       preferred_digit='0',
+                       force_semantic=True),
+        CheckerAgent("Checker", queues["Checker"], outboxes["Checker"],
+                     log, constraint=constraint, lifetime=duration/2),
+        StrategistAgent("Strategist", queues["Strategist"], outboxes["Strategist"],
+                        log, lifetime=duration/2,
+                        threshold=2, human_interval=2),
     ]
 
     if include_human:
         agents.append(
-            SyntheticHuman(
-                "Human",
-                queues["Human"],
-                outboxes["Human"],
-                log,
-                lifetime=duration,
-            )
-        )
+            SyntheticHuman("Human", queues["Human"], outboxes["Human"],
+                           log, lifetime=duration))
 
-    # run
     tasks = [asyncio.create_task(a.run()) for a in agents]
     await asyncio.sleep(duration)
     for t in tasks:
@@ -93,7 +64,7 @@ async def run_once(session: str,
     return path
 
 
-# ---------- metrics -----------------------------------------------------
+# ---------- агрегация метрик -------------------------------------------
 def analyse(paths):
     success, bytes_all, times = 0, [], []
     for p in paths:
@@ -120,12 +91,9 @@ def analyse(paths):
 # ---------- CLI ---------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sessions", type=int, default=3,
-                        help="baseline + hybrid pairs")
-    parser.add_argument("--duration", type=int, default=60,
-                        help="seconds per phase")
-    parser.add_argument("--logdir", default="logs",
-                        help="directory for JSONL logs")
+    parser.add_argument("--sessions", type=int, default=3)
+    parser.add_argument("--duration", type=int, default=60)
+    parser.add_argument("--logdir", default="logs")
     args = parser.parse_args()
 
     baseline_logs, hybrid_logs = [], []
