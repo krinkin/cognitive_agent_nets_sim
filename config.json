@@ -1,0 +1,16 @@
+{
+    "generator": {
+      "preferred_digit": null,
+      "force_semantic": false,
+      "buffer_size": 25
+    },
+    "strategist": {
+      "threshold": 1,
+      "human_interval": 5,
+      "top_k": 10
+    },
+    "synthetic_human": {
+      "lifetime": 90
+    }
+  }
+  
