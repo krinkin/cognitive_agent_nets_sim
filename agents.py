@@ -46,7 +46,7 @@ class GeneratorAgent(BaseAgent):
     def __init__(self, *a,
                  buffer_size=25,
                  preferred_digit=None,
-                 force_semantic=True,      # всегда содержит ‘07’
+                 force_semantic=False,      # всегда содержит ‘07’
                  **kw):
         super().__init__(*a, **kw)
         self.buffer_size = buffer_size
@@ -104,7 +104,7 @@ class StrategistAgent(BaseAgent):
     """Ведёт таблицу очков; подтверждает, когда набрано threshold очков."""
     def __init__(self, *a,
                  top_k=10,
-                 threshold=2,          # нужно хотя бы 2 очка
+                 threshold=1,          # нужно хотя бы 2 очка
                  human_interval=2,     # каждые 2 хода отправляем Human
                  **kw):
         super().__init__(*a, **kw)
