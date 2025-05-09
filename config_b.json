@@ -1,0 +1,17 @@
+{
+  "sessions": 1,
+  "duration": 500,
+  "generator": {
+    "preferred_digit": null,
+    "force_semantic": true,
+    "buffer_size": 50
+  },
+  "strategist": {
+    "threshold": 2,
+    "human_interval": 4,
+    "top_k": 10
+  },
+  "synthetic_human": {
+    "lifetime": 90
+  }
+}
