@@ -35,5 +35,9 @@ class SyntheticHuman:
                 if NASA_MONTH in c:
                     await self._send('Strategist', f'SCORE {c} +1')
                     return
-            suggestion=NASA_MONTH + ''.join(random.choices('0123456789',k=2))
+            # suggestion=NASA_MONTH + ''.join(random.choices('0123456789',k=2))
+            pos = random.randrange(3)          # 07?? | ?07? | ??07
+            digits = list(''.join(random.choices('0123456789', k=4)))
+            digits[pos], digits[pos + 1] = NASA_MONTH[0], NASA_MONTH[1]
+            suggestion = ''.join(digits)
             await self._send('Generator', f'SUGGEST {suggestion}')

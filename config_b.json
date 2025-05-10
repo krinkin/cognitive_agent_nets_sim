@@ -1,10 +1,10 @@
 {
-  "sessions": 1,
-  "duration": 500,
+  "sessions": 30,
+  "duration": 120,
   "generator": {
     "preferred_digit": null,
     "force_semantic": true,
-    "buffer_size": 50
+    "buffer_size": 100
   },
   "strategist": {
     "threshold": 2,

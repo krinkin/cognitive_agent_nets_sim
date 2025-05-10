@@ -1,145 +1,184 @@
-import asyncio
-import json
-import os
-import time
-import argparse
-from pathlib import Path
+# runner.py  ────────────────────────────────────────────────────────────────
+import argparse, asyncio, json, os, time
+from agents import (
+    GeneratorAgent,
+    CheckerAgent,
+    StrategistAgent,
+    SyntheticHumanAgent,
+)
 
-from agents import GeneratorAgent, CheckerAgent, StrategistAgent
-from synthetic_human import SyntheticHuman
-from constraints import sample_constraints
-
-
-# ---------------------------------------------------------------------
-def load_config(path):
-    return json.load(open(path)) if Path(path).exists() else {}
-
-
-def make_logger(session, logdir):
+# ────────────────────────── Buffered logger ────────────────────────────── #
+def make_logger(session: str, logdir: str, batch: int = 500):
     os.makedirs(logdir, exist_ok=True)
     path = os.path.join(logdir, f"{session}.jsonl")
-    fh = open(path, "w")
+    fh   = open(path, "w", buffering=1024 * 1024)       # 1 MiB buffer
 
-    def log(event, **data):
-        fh.write(json.dumps({"t": time.time(),
-                             "event": event,
-                             "session": session,
-                             **data}) + "\n")
-    return log, fh, path
+    buf, closed = [], False
 
+    def flush():
+        if buf:
+            fh.writelines(buf)
+            buf.clear()
 
-# ---------------------------------------------------------------------
-async def run_once(session, include_human, duration, logdir,
-                   g_cfg, s_cfg, h_cfg):
+    def log(event: str, **data):
+        nonlocal closed
+        if closed:               # файл уже закрыт → игнорируем запись
+            return
+        buf.append(
+            json.dumps(
+                {"t": time.time(),
+                 "event": event,
+                 "session": session,
+                 **data}
+            ) + "\n"
+        )
+        if len(buf) >= batch:
+            flush()
 
-    log, fh, path = make_logger(session, logdir)
+    def close():
+        nonlocal closed
+        if not closed:
+            flush()
+            fh.close()
+            closed = True
 
-    # queues
-    names = ["Generator", "Checker", "Strategist"] + (["Human"] if include_human else [])
-    queues = {n: asyncio.Queue() for n in names}
-    outboxes = {n: queues for n in names}
+    return log, close, path
 
-    # constraints
-    funcs = sample_constraints()
-    semantic = funcs[-1]
-    formals  = funcs[:-1]
+# ───────────────────────────── One session ─────────────────────────────── #
+async def run_once(config: dict, name: str, logdir: str, include_human: bool):
+    duration              = config["duration"]
+    log, close, log_path  = make_logger(name, logdir)
+    log("start")                               # точка старта сессии
 
-    def constraint(code):
-        return all(f(code) for f in formals) and semantic(code)
+    done_event            = asyncio.Event()
+    agents                = []
 
-    # agents
-    agents = [
-        GeneratorAgent("Generator", queues["Generator"], outboxes["Generator"],
-                       log, lifetime=duration/2, **g_cfg),
-        CheckerAgent("Checker", queues["Checker"], outboxes["Checker"],
-                     log, constraint=constraint, lifetime=duration/2),
-        StrategistAgent("Strategist", queues["Strategist"], outboxes["Strategist"],
-                        log, lifetime=duration/2, **s_cfg),
-    ]
+    # ── Broadcaster ──
+    def broadcast(msg: str):
+        log("msg", text=msg)
+        for ag in agents:
+            ag.inbox.put_nowait(msg)
+
+    # ── Generator ──
+    g = config["generator"]
+    agents.append(
+        GeneratorAgent(
+            preferred_digit=g["preferred_digit"],
+            force_semantic=g["force_semantic"],
+            buffer_size=g["buffer_size"],
+            name="G",
+            broadcast=broadcast,
+            done_event=done_event,
+        )
+    )
+
+    # ── Checker ──
+    agents.append(
+        CheckerAgent(name="C", broadcast=broadcast, done_event=done_event)
+    )
+
+    # ── Strategist ──
+    s = config["strategist"]
+    agents.append(
+        StrategistAgent(
+            threshold=s["threshold"],
+            include_human=include_human,
+            human_interval=s["human_interval"],
+            top_k=s["top_k"],
+            name="S",
+            broadcast=broadcast,
+            done_event=done_event,
+        )
+    )
+
+    # ── Synthetic Human (only in Hybrid) ──
     if include_human:
+        h = config["synthetic_human"]
         agents.append(
-            SyntheticHuman("Human", queues["Human"], outboxes["Human"],
-                           log, **h_cfg)
+            SyntheticHumanAgent(
+                lifetime=h["lifetime"],
+                name="H",
+                broadcast=broadcast,
+                done_event=done_event,
+            )
         )
 
     tasks = [asyncio.create_task(a.run()) for a in agents]
 
-    # -------- progress indicator ------------------------------------
-    for sec in range(duration):
-        await asyncio.sleep(1)
-        print(f"[{session}] {sec+1:>3}/{duration} s", end="\r", flush=True)
-    print()            # перенос строки
-    # ---------------------------------------------------------------
+    # ── Run until success or timeout ──
+    try:
+        await asyncio.wait_for(done_event.wait(), timeout=duration)
+    except asyncio.TimeoutError:
+        pass
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        close()                                  # flush + close журнал
 
-    for t in tasks:
-        t.cancel()
-    fh.close()
-    return path
+    return log_path
 
-
-# ---------------------------------------------------------------------
+# ───────────────────────────── Aggregation ─────────────────────────────── #
 def analyse(paths):
-    succ, bytes_all, times = 0, [], []
+    succ, deltas, bytes_total = 0, [], []
     for p in paths:
-        t0, confirm = None, None
-        for line in open(p):
-            rec = json.loads(line)
-            t0 = t0 or rec["t"]
-            if rec["event"] == "msg":
-                bytes_all.append(rec["bytes"])
-                if rec["msg"].startswith("CONFIRM") and confirm is None:
-                    confirm = rec["t"]
-        if confirm:
-            succ += 1
-            times.append(confirm - t0)
+        t0 = None
+        with open(p) as f:
+            for line in f:
+                ev = json.loads(line)
+                if ev["event"] == "start":
+                    t0 = ev["t"]
+                elif ev["event"] == "msg":
+                    txt = ev["text"]
+                    if txt.startswith("CONFIRM") and t0 is not None:
+                        succ += 1
+                        deltas.append(ev["t"] - t0)
+                    bytes_total.append(len(txt))
 
-    S = succ / len(paths) if paths else 0.0
-    T = sum(times) / len(times) if times else None
-    M = sum(bytes_all) / len(bytes_all) if bytes_all else None
-    return S, T, M
+    S = succ / len(paths)
+    T = None if not deltas else sum(deltas) / len(deltas)
+    B = sum(bytes_total) / len(paths)
+    return S, T, B
 
-
-# ---------------------------------------------------------------------
+# ────────────────────────────── CLI driver ─────────────────────────────── #
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sessions", type=int, default=None)
-    ap.add_argument("--duration", type=int, default=None)
-    ap.add_argument("--logdir", default=None)
-    ap.add_argument("--config", default="config.json")
+    ap.add_argument("--config", required=True, help="JSON config file")
+    ap.add_argument("--logdir", required=True, help="Directory for logs")
     args = ap.parse_args()
 
-    cfg = load_config(args.config)
-    sessions = args.sessions or cfg.get("sessions", 3)
-    duration = args.duration or cfg.get("duration", 60)
-    logdir   = args.logdir   or cfg.get("logdir", "logs")
+    with open(args.config) as f:
+        cfg = json.load(f)
 
-    g_cfg = cfg.get("generator", {})
-    s_cfg = cfg.get("strategist", {})
-    h_cfg = cfg.get("synthetic_human", {})
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-    baseline, hybrid = [], []
-    loop = asyncio.get_event_loop()
+    # Baseline (без человека)
+    paths_a = [
+        loop.run_until_complete(
+            run_once(cfg, f"baseline_{i}", args.logdir, include_human=False)
+        )
+        for i in range(cfg["sessions"])
+    ]
 
-    for i in range(sessions):
-        baseline.append(loop.run_until_complete(
-            run_once(f"baseline_{i}", False, duration, logdir,
-                     g_cfg, s_cfg, h_cfg)))
+    # Hybrid (с Synthetic-Human)
+    paths_b = [
+        loop.run_until_complete(
+            run_once(cfg, f"hybrid_{i}", args.logdir, include_human=True)
+        )
+        for i in range(cfg["sessions"])
+    ]
 
-    for i in range(sessions):
-        hybrid.append(loop.run_until_complete(
-            run_once(f"hybrid_{i}", True, duration, logdir,
-                     g_cfg, s_cfg, h_cfg)))
+    Sa, Ta, Ba = analyse(paths_a)
+    Sb, Tb, Bb = analyse(paths_b)
 
-    Sb, Tb, Mb = analyse(baseline)
-    Sh, Th, Mh = analyse(hybrid)
-
-    print(f"Baseline  success: {Sb}")
-    print(f"Hybrid    success: {Sh}")
-    print(f"Baseline  T_succ : {Tb}")
-    print(f"Hybrid    T_succ : {Th}")
-    print(f"Baseline  bytes  : {Mb}")
-    print(f"Hybrid    bytes  : {Mh}")
-
+    print(f"Baseline  success: {Sa:.3f}")
+    print(f"Hybrid    success: {Sb:.3f}")
+    print(f"Baseline  T_succ : {Ta}")
+    print(f"Hybrid    T_succ : {Tb}")
+    print(f"Baseline  bytes  : {Ba}")
+    print(f"Hybrid    bytes  : {Bb}")
 
 if __name__ == "__main__":
     main()
+# ───────────────────────────────────────────────────────────────────────────
