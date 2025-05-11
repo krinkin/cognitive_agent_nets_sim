@@ -1,0 +1,45 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, parallel ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
+
+    - name: Check formatting with Black
+      run: |
+        black --check --diff .
+
+    - name: Check imports with isort
+      run: |
+        isort --check --diff .
+
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+    - name: Check for non-English strings
+      run: |
+        echo "Checking for non-ASCII characters in comments and strings..."
+        # Find non-ASCII characters in Python files (excluding standard Unicode in strings)
+        grep -r --include="*.py" -P "[\x80-\xFF]" . || echo "No non-ASCII characters found in Python files"

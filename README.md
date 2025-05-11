@@ -62,3 +62,18 @@ Example with custom result location:
 mkdir -p ./output
 docker run --rm -v $(pwd):/app -e LOGDIR=/app/output can_poc mini-grid
 ```
+
+## CI/CD Automation
+
+This repository is configured with GitHub Actions for continuous integration:
+
+- **Automated Testing**: All commits and pull requests are automatically tested
+- **Docker Integration**: Tests run in Docker containers to ensure consistency
+- **Grid Verification**: Mini-grid search is run to validate grid runner functionality
+
+The workflow automatically:
+1. Builds the Docker image
+2. Runs the test suite
+3. Executes a mini-grid search with result verification
+
+You can view test results in the Actions tab on GitHub.

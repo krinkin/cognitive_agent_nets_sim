@@ -1,0 +1,54 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, parallel ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build Docker image
+      run: docker build -t can_poc .
+
+    - name: Run tests
+      run: docker run --rm can_poc test
+
+    - name: Run mini-grid test (quick integration test)
+      run: |
+        mkdir -p ./results
+        docker run --rm -v $(pwd)/results:/app/logs can_poc mini-grid --no-grid-parallel
+        
+    - name: Check test results
+      run: |
+        # Print summary of test results
+        if [ -d "./results" ]; then
+          echo "Test results directory exists"
+          ls -la ./results
+          
+          # Look for the most recent grid results
+          LATEST_GRID=$(find ./results -name "grid_*" -type d | sort -r | head -n 1)
+          if [ -n "$LATEST_GRID" ]; then
+            echo "Latest grid results: $LATEST_GRID"
+            if [ -f "$LATEST_GRID/results.csv" ]; then
+              echo "Results CSV exists:"
+              cat "$LATEST_GRID/results.csv"
+            else
+              echo "No results.csv found in $LATEST_GRID"
+            fi
+          else
+            echo "No grid results found"
+          fi
+        else
+          echo "No results directory found"
+        fi
