@@ -71,25 +71,32 @@ class GeneratorAgent(BaseAgent):
 
     # ----------------------------
     async def loop(self):
-        while True:
-            # propose new (or buffered) code
-            if not self.buffer:
-                self.buffer = [self._random_code()
-                               for _ in range(self.buffer_size)]
-            code = self.buffer.pop()
-            await self.send(f"PROPOSE {code} {self.name}")
+        try:
+            while True:
+                # propose new (or buffered) code
+                if not self.buffer:
+                    self.buffer = [self._random_code()
+                                   for _ in range(self.buffer_size)]
+                code = self.buffer.pop()
+                await self.send(f"PROPOSE {code} {self.name}")
 
-            # every so often endorse what we proposed
-            # (helps consensus if Checker said ⊕ already)
-            try:
-                msg = await asyncio.wait_for(self.recv(), timeout=0.05)
-            except asyncio.TimeoutError:
-                continue
+                # every so often endorse what we proposed
+                # (helps consensus if Checker said ⊕ already)
+                try:
+                    msg = await asyncio.wait_for(self.recv(), timeout=0.05)
 
-            if msg.startswith("EVAL") and "+" in msg:
-                _, c, verdict, *_ = msg.split()
-                if c == code:
-                    await self.send(f"ENDORSE {code} {self.name}")
+                    if msg.startswith("EVAL") and "+" in msg:
+                        _, c, verdict, *_ = msg.split()
+                        if c == code:
+                            await self.send(f"ENDORSE {code} {self.name}")
+                except asyncio.TimeoutError:
+                    continue
+                except asyncio.CancelledError:
+                    # Properly handle task cancellation
+                    break
+        except asyncio.CancelledError:
+            # Ensure clean task cancellation
+            pass
 
 
 # --------------------------------------------------------------------------- #
@@ -106,16 +113,24 @@ def _semantic_constraint(code: str) -> bool:
 
 class CheckerAgent(BaseAgent):
     async def loop(self):
-        while True:
-            msg = await self.recv()
-            if msg.startswith("PROPOSE"):
-                _, code, sender = msg.split()
-                is_ok = (_formal_constraints(code) and
-                         _semantic_constraint(code))
-                verdict = "+" if is_ok else "-"
-                await self.send(f"EVAL {code} {verdict} {self.name}")
-                if is_ok:
-                    await self.send(f"ENDORSE {code} {self.name}")
+        try:
+            while True:
+                try:
+                    msg = await self.recv()
+                    if msg.startswith("PROPOSE"):
+                        _, code, sender = msg.split()
+                        is_ok = (_formal_constraints(code) and
+                                 _semantic_constraint(code))
+                        verdict = "+" if is_ok else "-"
+                        await self.send(f"EVAL {code} {verdict} {self.name}")
+                        if is_ok:
+                            await self.send(f"ENDORSE {code} {self.name}")
+                except asyncio.CancelledError:
+                    # Handle cancellation of recv
+                    break
+        except asyncio.CancelledError:
+            # Ensure clean task cancellation
+            pass
 
 
 # --------------------------------------------------------------------------- #
@@ -147,32 +162,40 @@ class StrategistAgent(BaseAgent):
 
     # ----------------------------
     async def loop(self):
-        while True:
-            msg = await self.recv()
-            parts = msg.split()
+        try:
+            while True:
+                try:
+                    msg = await self.recv()
+                    parts = msg.split()
 
-            if parts[0] == "EVAL":
-                _, code, verdict, sender = parts
-                if verdict == "+":
-                    self._endorse(code, sender)
+                    if parts[0] == "EVAL":
+                        _, code, verdict, sender = parts
+                        if verdict == "+":
+                            self._endorse(code, sender)
 
-            elif parts[0] == "ENDORSE":
-                _, code, sender = parts
-                self._endorse(code, sender)
+                    elif parts[0] == "ENDORSE":
+                        _, code, sender = parts
+                        self._endorse(code, sender)
 
-            elif parts[0] == "SCORE":           # from human
-                _, code, delta, sender = parts
-                if delta.startswith('+'):
-                    self._endorse(code, sender)
+                    elif parts[0] == "SCORE":           # from human
+                        _, code, delta, sender = parts
+                        if delta.startswith('+'):
+                            self._endorse(code, sender)
 
-            # periodically ping human with top-K
-            if self.include_human and self.cycle % self.human_interval == 0:
-                top = sorted(self.endorsements.items(),
-                             key=lambda kv: -len(kv[1]))[: self.top_k]
-                codes = ' '.join(c for c, _ in top)
-                if codes:
-                    await self.send(f"TOP {codes} {self.name}")
-            self.cycle += 1
+                    # periodically ping human with top-K
+                    if self.include_human and self.cycle % self.human_interval == 0:
+                        top = sorted(self.endorsements.items(),
+                                     key=lambda kv: -len(kv[1]))[: self.top_k]
+                        codes = ' '.join(c for c, _ in top)
+                        if codes:
+                            await self.send(f"TOP {codes} {self.name}")
+                    self.cycle += 1
+                except asyncio.CancelledError:
+                    # Handle cancellation of recv
+                    break
+        except asyncio.CancelledError:
+            # Ensure clean task cancellation
+            pass
 
 
 # --------------------------------------------------------------------------- #
@@ -185,23 +208,31 @@ class SyntheticHumanAgent(BaseAgent):
         self.start_ts  = time.time()
 
     async def loop(self):
-        while True:
-            # stop after lifetime seconds
-            if time.time() - self.start_ts > self.lifetime:
-                await asyncio.sleep(999)
-            msg = await self.recv()
-            if msg.startswith("TOP"):
-                _, *codes, sender = msg.split()
-                # endorse first code that has 07
-                for code in codes:
-                    if "07" in code:
-                        await self.send(f"SCORE {code} +1 {self.name}")
-                        break
-                else:
-                    # propose new code with 07 in random position
-                    pos = random.randrange(3)
-                    digits = [random.choice('0123456789') for _ in range(4)]
-                    digits[pos], digits[pos + 1] = '0', '7'
-                    code = ''.join(digits)
-                    await self.send(f"PROPOSE {code} {self.name}")
-                    await self.send(f"ENDORSE {code} {self.name}")
+        try:
+            while True:
+                try:
+                    # stop after lifetime seconds
+                    if time.time() - self.start_ts > self.lifetime:
+                        await asyncio.sleep(999)
+                    msg = await self.recv()
+                    if msg.startswith("TOP"):
+                        _, *codes, sender = msg.split()
+                        # endorse first code that has 07
+                        for code in codes:
+                            if "07" in code:
+                                await self.send(f"SCORE {code} +1 {self.name}")
+                                break
+                        else:
+                            # propose new code with 07 in random position
+                            pos = random.randrange(3)
+                            digits = [random.choice('0123456789') for _ in range(4)]
+                            digits[pos], digits[pos + 1] = '0', '7'
+                            code = ''.join(digits)
+                            await self.send(f"PROPOSE {code} {self.name}")
+                            await self.send(f"ENDORSE {code} {self.name}")
+                except asyncio.CancelledError:
+                    # Handle cancellation of recv
+                    break
+        except asyncio.CancelledError:
+            # Ensure clean task cancellation
+            pass

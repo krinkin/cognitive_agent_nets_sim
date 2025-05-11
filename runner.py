@@ -242,24 +242,29 @@ def run_simulations(config, logdir, parallel=False, processes=None):
         # Run sequentially using a single event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
-        # Baseline (without human)
-        print("Running baseline simulations...")
-        paths_a = []
-        for i in tqdm(range(config["sessions"]), desc="Baseline", unit="session"):
-            path = loop.run_until_complete(
-                run_once(config, f"baseline_{i}", logdir, include_human=False)
-            )
-            paths_a.append(path)
 
-        # Hybrid (with Synthetic-Human)
-        print("Running hybrid simulations...")
-        paths_b = []
-        for i in tqdm(range(config["sessions"]), desc="Hybrid", unit="session"):
-            path = loop.run_until_complete(
-                run_once(config, f"hybrid_{i}", logdir, include_human=True)
-            )
-            paths_b.append(path)
+        try:
+            # Baseline (without human)
+            print("Running baseline simulations...")
+            paths_a = []
+            for i in tqdm(range(config["sessions"]), desc="Baseline", unit="session"):
+                path = loop.run_until_complete(
+                    run_once(config, f"baseline_{i}", logdir, include_human=False)
+                )
+                paths_a.append(path)
+
+            # Hybrid (with Synthetic-Human)
+            print("Running hybrid simulations...")
+            paths_b = []
+            for i in tqdm(range(config["sessions"]), desc="Hybrid", unit="session"):
+                path = loop.run_until_complete(
+                    run_once(config, f"hybrid_{i}", logdir, include_human=True)
+                )
+                paths_b.append(path)
+        finally:
+            # Ensure the event loop is properly closed
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
             
     return paths_a, paths_b
 
