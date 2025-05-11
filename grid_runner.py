@@ -74,20 +74,22 @@ def run_single_config(params):
     """Run a single configuration in the grid.
 
     Args:
-        params: Tuple of (config, config_name, config_id, config_dir, parallel, processes)
+        params: Tuple of (config, config_name, config_id, config_dir, parallel, processes, param_grid, total_configs)
 
     Returns:
         Dictionary with results for this configuration
     """
     # When we're in a multiprocessing context, we can't use nested process pools
     # So we force sequential execution in run_simulations
-    config, config_name, config_id, config_dir, parallel, processes, param_grid = params
+    config, config_name, config_id, config_dir, parallel, processes, param_grid, total_configs = params
 
     # When running as part of grid search, always use sequential mode for sub-simulations
     # to avoid nested process pools
     parallel = False
-    
-    print(f"\nRunning configuration {config_id}: {config_name}")
+
+    # Use a more compact output format for individual configurations
+    # as we're displaying the global progress bar
+    print(f"Config {config_id:03d}/{total_configs}: {config_name}")
     
     # Save this specific configuration
     os.makedirs(config_dir, exist_ok=True)
@@ -175,10 +177,19 @@ def run_grid_search(base_config_path, param_grid, logdir, parallel=False, proces
     with open(base_config_path) as f:
         base_config = json.load(f)
     
+    # Calculate total number of combinations before creating configs
+    total_combinations = 1
+    for param_name, param_values in param_grid.items():
+        total_combinations *= len(param_values)
+
+    print(f"Grid simulation will test {total_combinations} configurations")
+
     # Create all parameter combinations
     print(f"Generating configuration grid...")
     configs = create_grid_configs(base_config, param_grid)
-    print(f"Created {len(configs)} configurations to test")
+
+    # Verify that configs count matches the calculated combinations
+    assert len(configs) == total_combinations, f"Configuration count mismatch: expected {total_combinations}, got {len(configs)}"
     
     # Determine process count for grid-level parallelism
     if grid_processes is None:
@@ -203,39 +214,63 @@ def run_grid_search(base_config_path, param_grid, logdir, parallel=False, proces
     for i, (config, config_name) in enumerate(configs):
         config_dir = os.path.join(grid_dir, f"config_{i:03d}")
         config_params.append((
-            config, 
-            config_name, 
-            i, 
-            config_dir, 
-            parallel, 
+            config,
+            config_name,
+            i,
+            config_dir,
+            parallel,
             processes,
-            param_grid
+            param_grid,
+            len(configs)  # Pass total configs count to each worker
         ))
     
     results = []
     
     # Run configurations - either in parallel or sequentially
+    print(f"\n{'=' * 50}")
+    print(f"Starting Grid Simulation with {len(configs)} configurations")
+    print(f"{'=' * 50}")
+
     if grid_parallel and len(configs) > 1:
         print(f"Running grid search in parallel with {grid_processes} processes")
-        
+
         # Run configurations in parallel
         with Pool(processes=grid_processes, initializer=runner.init_worker) as pool:
             configs_iter = pool.imap(run_single_config, config_params)
-            
-            # Use tqdm to show progress
-            for result in tqdm(configs_iter, total=len(configs), desc="Grid", unit="config"):
+
+            # Use tqdm to show progress with enhanced description
+            progress_bar = tqdm(configs_iter,
+                             total=len(configs),
+                             desc="Grid Simulation",
+                             unit="config",
+                             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]")
+
+            for result in progress_bar:
                 results.append(result)
-                
+
+                # Update progress bar description with percentage
+                progress_percentage = (len(results) / len(configs)) * 100
+                progress_bar.set_description(f"Grid Simulation ({progress_percentage:.1f}%)")
+
                 # Save incremental results after each configuration
                 df = pd.DataFrame(results)
                 df.to_csv(os.path.join(grid_dir, "results.csv"), index=False)
     else:
         # Run configurations sequentially
         print("Running grid search sequentially")
-        for params in tqdm(config_params, desc="Configurations", unit="config"):
+        progress_bar = tqdm(config_params,
+                        desc="Grid Simulation",
+                        unit="config",
+                        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]")
+
+        for params in progress_bar:
             result = run_single_config(params)
             results.append(result)
-            
+
+            # Update progress bar description with percentage
+            progress_percentage = (len(results) / len(configs)) * 100
+            progress_bar.set_description(f"Grid Simulation ({progress_percentage:.1f}%)")
+
             # Save incremental results after each configuration
             df = pd.DataFrame(results)
             df.to_csv(os.path.join(grid_dir, "results.csv"), index=False)

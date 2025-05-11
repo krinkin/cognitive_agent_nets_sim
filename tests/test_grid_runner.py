@@ -147,8 +147,9 @@ def test_run_single_config(mock_run_simulations):
         param_grid = create_test_param_grid()
         config_dir = os.path.join(tmpdirname, "test_config")
         
-        params = (config, "test_config", 0, config_dir, False, None, param_grid)
-        
+        total_configs = 4  # Mock total number of configurations
+        params = (config, "test_config", 0, config_dir, False, None, param_grid, total_configs)
+
         # Run single config
         result = grid_runner.run_single_config(params)
         
