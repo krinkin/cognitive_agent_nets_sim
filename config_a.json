@@ -1,14 +1,14 @@
 {
-  "sessions": 3,
-  "duration": 60,
+  "sessions": 2,
+  "duration": 40,
   "generator": {
-    "preferred_digit": null,
+    "preferred_digit": 0,
     "force_semantic": false,
     "buffer_size": 25
   },
   "strategist": {
-    "threshold": 1,
-    "human_interval": 5,
+    "threshold": 2,
+    "human_interval": 6,
     "top_k": 10
   },
   "synthetic_human": {

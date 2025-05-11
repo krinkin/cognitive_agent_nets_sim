@@ -4,10 +4,9 @@ WORKDIR /app
 COPY . /app
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a wrapper script to handle different modes
-RUN echo '#!/bin/bash\nif [ "$1" = "test" ]; then\n  python -m pytest -v\nelif [ "$1" = "grid" ]; then\n  python grid_runner.py --config config_a.json --logdir /app/logs --grid grid_params.json --parallel\nelif [ "$1" = "focused-grid" ]; then\n  python grid_runner.py --config config_a.json --logdir /app/logs --grid focused_grid.json --parallel\nelse\n  python runner.py --config config_a.json --logdir /app/logs --parallel\nfi' > /usr/local/bin/run.sh && \
-    chmod +x /usr/local/bin/run.sh
+# Make run script executable
+RUN chmod +x /app/run.sh
 
 # Default: run the simulation
-ENTRYPOINT ["/usr/local/bin/run.sh"]
+ENTRYPOINT ["/app/run.sh"]
 CMD []
