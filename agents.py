@@ -89,6 +89,12 @@ class GeneratorAgent(BaseAgent):
                         _, c, verdict, *_ = msg.split()
                         if c == code:
                             await self.send(f"ENDORSE {code} {self.name}")
+                    elif msg.startswith("SUGGEST"):
+                        _, suggested_code, sender = msg.split()
+                        # Add the suggested code to our buffer with priority
+                        if sender == "H" and suggested_code not in self.buffer:
+                            # Insert at beginning so it's used soon
+                            self.buffer.insert(0, suggested_code)
                 except asyncio.TimeoutError:
                     continue
                 except asyncio.CancelledError:
@@ -228,8 +234,8 @@ class SyntheticHumanAgent(BaseAgent):
                             digits = [random.choice('0123456789') for _ in range(4)]
                             digits[pos], digits[pos + 1] = '0', '7'
                             code = ''.join(digits)
-                            await self.send(f"PROPOSE {code} {self.name}")
-                            await self.send(f"ENDORSE {code} {self.name}")
+                            # Use SUGGEST message to send directly to GeneratorAgent
+                            await self.send(f"SUGGEST {code} {self.name}")
                 except asyncio.CancelledError:
                     # Handle cancellation of recv
                     break
