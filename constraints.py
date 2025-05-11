@@ -1,6 +1,6 @@
 import random
 
-# ---------- формальные правила ----------
+# ---------- formal rules ----------
 def even_first_digit(code: str) -> bool:
     return int(code[0]) % 2 == 0
 
@@ -9,7 +9,7 @@ def exactly_two_repeats(code: str) -> bool:
 
 FORMAL = [even_first_digit, exactly_two_repeats]
 
-# ---------- семантическое правило ----------
+# ---------- semantic rule ----------
 NASA_MONTH = "07"
 
 def semantic_contains_nasa_month(code: str) -> bool:
@@ -17,7 +17,7 @@ def semantic_contains_nasa_month(code: str) -> bool:
 
 SEMANTIC = [semantic_contains_nasa_month]
 
-# ---------- выдаём *две* формальных + одну семантическую ----------
+# ---------- sample *two* formal + one semantic ----------
 def sample_constraints():
     formal1, formal2 = random.sample(FORMAL, 2)   # ← k = 2
     semantic         = random.choice(SEMANTIC)

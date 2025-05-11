@@ -24,7 +24,7 @@ def make_logger(session: str, logdir: str, batch: int = 500):
 
     def log(event: str, **data):
         nonlocal closed
-        if closed:               # файл уже закрыт → игнорируем запись
+        if closed:               # file is already closed → ignore write
             return
         buf.append(
             json.dumps(
@@ -55,7 +55,7 @@ def init_worker():
 async def run_once(config: dict, name: str, logdir: str, include_human: bool):
     duration              = config["duration"]
     log, close, log_path  = make_logger(name, logdir)
-    log("start")                               # точка старта сессии
+    log("start")                               # session start point
 
     done_event            = asyncio.Event()
     agents                = []
@@ -131,7 +131,7 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        close()                                  # flush + close журнал
+        close()                                  # flush + close the log
 
     return log_path
 
@@ -221,7 +221,7 @@ def run_simulations(config, logdir, parallel=False, processes=None):
     if parallel:
         # Run in parallel using multiprocessing with proper SIGINT handling
         with Pool(processes=num_processes, initializer=init_worker) as pool:
-            # Baseline (без человека)
+            # Baseline (without human)
             print("Running baseline simulations...")
             paths_a = list(tqdm(
                 pool.imap(run_simulation, baseline_params),
@@ -230,7 +230,7 @@ def run_simulations(config, logdir, parallel=False, processes=None):
                 unit="session"
             ))
             
-            # Hybrid (с Synthetic-Human)
+            # Hybrid (with Synthetic-Human)
             print("Running hybrid simulations...")
             paths_b = list(tqdm(
                 pool.imap(run_simulation, hybrid_params),
@@ -243,7 +243,7 @@ def run_simulations(config, logdir, parallel=False, processes=None):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        # Baseline (без человека)
+        # Baseline (without human)
         print("Running baseline simulations...")
         paths_a = []
         for i in tqdm(range(config["sessions"]), desc="Baseline", unit="session"):
@@ -252,7 +252,7 @@ def run_simulations(config, logdir, parallel=False, processes=None):
             )
             paths_a.append(path)
 
-        # Hybrid (с Synthetic-Human)
+        # Hybrid (with Synthetic-Human)
         print("Running hybrid simulations...")
         paths_b = []
         for i in tqdm(range(config["sessions"]), desc="Hybrid", unit="session"):

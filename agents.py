@@ -86,7 +86,7 @@ class GeneratorAgent(BaseAgent):
             except asyncio.TimeoutError:
                 continue
 
-            if msg.startswith("EVAL") and "⊕" in msg:
+            if msg.startswith("EVAL") and "+" in msg:
                 _, c, verdict, *_ = msg.split()
                 if c == code:
                     await self.send(f"ENDORSE {code} {self.name}")
@@ -112,7 +112,7 @@ class CheckerAgent(BaseAgent):
                 _, code, sender = msg.split()
                 is_ok = (_formal_constraints(code) and
                          _semantic_constraint(code))
-                verdict = "⊕" if is_ok else "⊖"
+                verdict = "+" if is_ok else "-"
                 await self.send(f"EVAL {code} {verdict} {self.name}")
                 if is_ok:
                     await self.send(f"ENDORSE {code} {self.name}")
@@ -153,7 +153,7 @@ class StrategistAgent(BaseAgent):
 
             if parts[0] == "EVAL":
                 _, code, verdict, sender = parts
-                if verdict == "⊕":
+                if verdict == "+":
                     self._endorse(code, sender)
 
             elif parts[0] == "ENDORSE":

@@ -82,7 +82,7 @@ def test_analyse():
             start_time = time.time()
             f.write(json.dumps({"t": start_time, "event": "start"}) + "\n")
             f.write(json.dumps({"t": start_time + 1.0, "event": "msg", "text": "PROPOSE 1234 G"}) + "\n")
-            f.write(json.dumps({"t": start_time + 1.5, "event": "msg", "text": "EVAL 1234 ⊖ C"}) + "\n")
+            f.write(json.dumps({"t": start_time + 1.5, "event": "msg", "text": "EVAL 1234 - C"}) + "\n")
         log_paths.append(log_path2)
         
         # Log file with a successful confirmation

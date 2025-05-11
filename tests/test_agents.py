@@ -133,7 +133,7 @@ async def test_checker_agent_evaluation(broadcast_callback, done_event):
 
     # Check that the agent evaluated the code correctly
     assert len(broadcast_callback.messages) == 2
-    assert broadcast_callback.messages[0] == "EVAL 0707 ⊕ C"
+    assert broadcast_callback.messages[0] == "EVAL 0707 + C"
     assert broadcast_callback.messages[1] == "ENDORSE 0707 C"
 
     # Clear messages for next test
@@ -149,7 +149,7 @@ async def test_checker_agent_evaluation(broadcast_callback, done_event):
 
     # Check that the agent evaluated the code correctly
     assert len(broadcast_callback.messages) == 1
-    assert broadcast_callback.messages[0] == "EVAL 1234 ⊖ C"
+    assert broadcast_callback.messages[0] == "EVAL 1234 - C"
 
 @pytest.mark.asyncio
 async def test_strategist_agent_endorsement(broadcast_callback, done_event):
