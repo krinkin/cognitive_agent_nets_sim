@@ -1,5 +1,6 @@
 # runner.py  ────────────────────────────────────────────────────────────────
-import argparse, asyncio, json, os, time, datetime
+import argparse, asyncio, json, os, time, datetime, multiprocessing, signal
+from multiprocessing import Pool
 from tqdm import tqdm
 from agents import (
     GeneratorAgent,
@@ -44,6 +45,11 @@ def make_logger(session: str, logdir: str, batch: int = 500):
             closed = True
 
     return log, close, path
+
+# Initialize worker process to ignore keyboard interrupts
+def init_worker():
+    """Initialize worker process by making it ignore SIGINT signal."""
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 # ───────────────────────────── One session ─────────────────────────────── #
 async def run_once(config: dict, name: str, logdir: str, include_human: bool):
@@ -129,6 +135,27 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
 
     return log_path
 
+# ────────────────── Run single simulation in a process ────────────────── #
+def run_simulation(params):
+    """
+    Run a single simulation in a separate process.
+    This function is called by the multiprocessing pool.
+    """
+    config, session_name, logdir, include_human = params
+
+    # Create a new event loop for this process
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # Run the simulation and return the log path
+    log_path = loop.run_until_complete(
+        run_once(config, session_name, logdir, include_human)
+    )
+
+    # Close the loop and return the log path
+    loop.close()
+    return log_path
+
 # ───────────────────────────── Aggregation ─────────────────────────────── #
 def analyse(paths):
     succ, deltas, bytes_total = 0, [], []
@@ -156,6 +183,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True, help="JSON config file")
     ap.add_argument("--logdir", required=True, help="Directory for logs")
+    ap.add_argument("--parallel", action="store_true", help="Run simulations in parallel")
+    ap.add_argument("--processes", type=int, default=None,
+                   help="Number of parallel processes (default: CPU count)")
     args = ap.parse_args()
 
     start_time = datetime.datetime.now()
@@ -165,31 +195,76 @@ def main():
     with open(args.config) as f:
         cfg = json.load(f)
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
     # Ensure sessions is defined in the config
     if "sessions" not in cfg:
         print("Warning: 'sessions' not defined in config, defaulting to 3")
         cfg["sessions"] = 3
 
-    # Baseline (без человека)
-    print("Running baseline simulations...")
-    paths_a = []
-    for i in tqdm(range(cfg["sessions"]), desc="Baseline", unit="session"):
-        path = loop.run_until_complete(
-            run_once(cfg, f"baseline_{i}", args.logdir, include_human=False)
-        )
-        paths_a.append(path)
+    # Set up CPU count for parallel processing
+    num_processes = args.processes if args.processes else multiprocessing.cpu_count()
+    if args.parallel:
+        print(f"Running simulations in parallel using {num_processes} processes")
+    else:
+        print("Running simulations in sequence (use --parallel for faster execution)")
+        # Create a single event loop for sequential execution
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-    # Hybrid (с Synthetic-Human)
-    print("Running hybrid simulations...")
-    paths_b = []
-    for i in tqdm(range(cfg["sessions"]), desc="Hybrid", unit="session"):
-        path = loop.run_until_complete(
-            run_once(cfg, f"hybrid_{i}", args.logdir, include_human=True)
-        )
-        paths_b.append(path)
+    # Prepare parameters for baseline simulations
+    baseline_params = [
+        (cfg, f"baseline_{i}", args.logdir, False)
+        for i in range(cfg["sessions"])
+    ]
+
+    # Prepare parameters for hybrid simulations
+    hybrid_params = [
+        (cfg, f"hybrid_{i}", args.logdir, True)
+        for i in range(cfg["sessions"])
+    ]
+
+    # Run simulations
+    if args.parallel:
+        # Run in parallel using multiprocessing with proper SIGINT handling
+        with Pool(processes=num_processes, initializer=init_worker) as pool:
+            # Baseline (без человека)
+            print("Running baseline simulations...")
+            paths_a = list(tqdm(
+                pool.imap(run_simulation, baseline_params),
+                total=cfg["sessions"],
+                desc="Baseline",
+                unit="session"
+            ))
+
+            # Hybrid (с Synthetic-Human)
+            print("Running hybrid simulations...")
+            paths_b = list(tqdm(
+                pool.imap(run_simulation, hybrid_params),
+                total=cfg["sessions"],
+                desc="Hybrid",
+                unit="session"
+            ))
+    else:
+        # Run sequentially using a single event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        # Baseline (без человека)
+        print("Running baseline simulations...")
+        paths_a = []
+        for i in tqdm(range(cfg["sessions"]), desc="Baseline", unit="session"):
+            path = loop.run_until_complete(
+                run_once(cfg, f"baseline_{i}", args.logdir, include_human=False)
+            )
+            paths_a.append(path)
+
+        # Hybrid (с Synthetic-Human)
+        print("Running hybrid simulations...")
+        paths_b = []
+        for i in tqdm(range(cfg["sessions"]), desc="Hybrid", unit="session"):
+            path = loop.run_until_complete(
+                run_once(cfg, f"hybrid_{i}", args.logdir, include_human=True)
+            )
+            paths_b.append(path)
 
     Sa, Ta, Ba = analyse(paths_a)
     Sb, Tb, Bb = analyse(paths_b)
