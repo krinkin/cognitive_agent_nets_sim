@@ -153,6 +153,11 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
+    # Ensure sessions is defined in the config
+    if "sessions" not in cfg:
+        print("Warning: 'sessions' not defined in config, defaulting to 3")
+        cfg["sessions"] = 3
+
     # Baseline (без человека)
     paths_a = [
         loop.run_until_complete(
