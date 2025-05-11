@@ -87,9 +87,13 @@ def run_single_config(params):
     # to avoid nested process pools
     parallel = False
 
-    # Use a more compact output format for individual configurations
-    # as we're displaying the global progress bar
-    print(f"Config {config_id:03d}/{total_configs}: {config_name}")
+    # Shorten config name for better display
+    short_name = config_name
+    if len(short_name) > 60:
+        short_name = short_name[:57] + "..."
+
+    # Display more informative but compact header for this config
+    print(f"\nConfig {config_id+1:03d}/{total_configs}: {short_name}")
     
     # Save this specific configuration
     os.makedirs(config_dir, exist_ok=True)
@@ -243,14 +247,22 @@ def run_grid_search(base_config_path, param_grid, logdir, parallel=False, proces
                              total=len(configs),
                              desc="Grid Simulation",
                              unit="config",
-                             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]")
+                             bar_format="{desc}: {percentage:3.1f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]")
 
             for result in progress_bar:
                 results.append(result)
 
-                # Update progress bar description with percentage
-                progress_percentage = (len(results) / len(configs)) * 100
-                progress_bar.set_description(f"Grid Simulation ({progress_percentage:.1f}%)")
+                # Calculate success rates for completed configs
+                completed = len(results)
+                baseline_success = sum(r.get('baseline_success_rate', 0) for r in results) / completed if completed > 0 else 0
+                hybrid_success = sum(r.get('hybrid_success_rate', 0) for r in results) / completed if completed > 0 else 0
+
+                # Update progress bar with rich information
+                progress_bar.set_postfix({
+                    'B-Success': f"{baseline_success:.2f}",
+                    'H-Success': f"{hybrid_success:.2f}",
+                    'Remaining': f"{len(configs) - completed}"
+                })
 
                 # Save incremental results after each configuration
                 df = pd.DataFrame(results)
@@ -261,15 +273,23 @@ def run_grid_search(base_config_path, param_grid, logdir, parallel=False, proces
         progress_bar = tqdm(config_params,
                         desc="Grid Simulation",
                         unit="config",
-                        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]")
+                        bar_format="{desc}: {percentage:3.1f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]")
 
         for params in progress_bar:
             result = run_single_config(params)
             results.append(result)
 
-            # Update progress bar description with percentage
-            progress_percentage = (len(results) / len(configs)) * 100
-            progress_bar.set_description(f"Grid Simulation ({progress_percentage:.1f}%)")
+            # Calculate success rates for completed configs
+            completed = len(results)
+            baseline_success = sum(r.get('baseline_success_rate', 0) for r in results) / completed if completed > 0 else 0
+            hybrid_success = sum(r.get('hybrid_success_rate', 0) for r in results) / completed if completed > 0 else 0
+
+            # Update progress bar with rich information
+            progress_bar.set_postfix({
+                'B-Success': f"{baseline_success:.2f}",
+                'H-Success': f"{hybrid_success:.2f}",
+                'Remaining': f"{len(configs) - completed}"
+            })
 
             # Save incremental results after each configuration
             df = pd.DataFrame(results)

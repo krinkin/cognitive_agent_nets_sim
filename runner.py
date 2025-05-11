@@ -114,24 +114,46 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
 
     # ── Run until success or timeout ──
     start_time = time.time()
-    pbar = tqdm(total=duration, desc=f"Simulation {name}", unit="sec", leave=False)
+    mode = "Hybrid" if include_human else "Baseline"
+    sim_id = name.split('_')[-1] if '_' in name else name
+
+    pbar = tqdm(
+        total=duration,
+        desc=f"{mode} {sim_id}",
+        unit="sec",
+        leave=False,
+        bar_format="{desc}: {percentage:3.1f}%|{bar}| {n:.1f}/{total:.1f}s [{elapsed}<{remaining}]"
+    )
+
+    success = False
     try:
         # We'll update progress bar every 0.1 seconds
         while not done_event.is_set() and (time.time() - start_time) < duration:
             await asyncio.sleep(0.1)
             elapsed = min(time.time() - start_time, duration)
-            pbar.n = round(elapsed, 2)  # Round to 2 decimal places for cleaner display
-            pbar.refresh()
+            pbar.n = elapsed
+
+            # Check if we've succeeded (done_event is set)
             if done_event.is_set():
-                pbar.n = round(duration, 2)
+                success = True
+                pbar.set_postfix({"status": "✓ Success"})
+                pbar.n = elapsed  # Show actual completion time
                 pbar.refresh()
                 break
+
+            pbar.set_postfix({"status": "Running"})
+            pbar.refresh()
     finally:
+        if not success and pbar.n >= duration - 0.1:
+            pbar.set_postfix({"status": "⚠ Timeout"})
+
         pbar.close()
         for t in tasks:
             t.cancel()
+
+        # Gracefully cancel and wait for tasks to clean up
         await asyncio.gather(*tasks, return_exceptions=True)
-        close()                                  # flush + close the log
+        close()  # flush + close the log
 
     return log_path
 
@@ -227,16 +249,18 @@ def run_simulations(config, logdir, parallel=False, processes=None):
                 pool.imap(run_simulation, baseline_params),
                 total=config["sessions"],
                 desc="Baseline",
-                unit="session"
+                unit="session",
+                bar_format="{desc}: {percentage:3.1f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]"
             ))
-            
+
             # Hybrid (with Synthetic-Human)
             print("Running hybrid simulations...")
             paths_b = list(tqdm(
                 pool.imap(run_simulation, hybrid_params),
                 total=config["sessions"],
                 desc="Hybrid",
-                unit="session"
+                unit="session",
+                bar_format="{desc}: {percentage:3.1f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]"
             ))
     else:
         # Run sequentially using a single event loop
@@ -247,7 +271,10 @@ def run_simulations(config, logdir, parallel=False, processes=None):
             # Baseline (without human)
             print("Running baseline simulations...")
             paths_a = []
-            for i in tqdm(range(config["sessions"]), desc="Baseline", unit="session"):
+            for i in tqdm(range(config["sessions"]),
+                       desc="Baseline",
+                       unit="session",
+                       bar_format="{desc}: {percentage:3.1f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]"):
                 path = loop.run_until_complete(
                     run_once(config, f"baseline_{i}", logdir, include_human=False)
                 )
@@ -256,7 +283,10 @@ def run_simulations(config, logdir, parallel=False, processes=None):
             # Hybrid (with Synthetic-Human)
             print("Running hybrid simulations...")
             paths_b = []
-            for i in tqdm(range(config["sessions"]), desc="Hybrid", unit="session"):
+            for i in tqdm(range(config["sessions"]),
+                       desc="Hybrid",
+                       unit="session",
+                       bar_format="{desc}: {percentage:3.1f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]"):
                 path = loop.run_until_complete(
                     run_once(config, f"hybrid_{i}", logdir, include_human=True)
                 )
