@@ -1,0 +1,11 @@
+{
+  "sessions": [10, 20, 40],
+  "duration": [30, 60, 120],
+  "generator.preferred_digit": [null, "0", "7"],
+  "generator.force_semantic": [false, true],
+  "generator.buffer_size": [25, 50, 100],
+  "strategist.threshold": [1, 2, 3],
+  "strategist.human_interval": [2, 3, 5],
+  "strategist.top_k": [5, 10, 15],
+  "synthetic_human.lifetime": [60, 90, 120]
+}

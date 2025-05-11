@@ -1,0 +1,7 @@
+{
+  "sessions": [2],
+  "duration": [20],
+  "generator.force_semantic": [false, true],
+  "generator.preferred_digit": [null, 7],
+  "strategist.threshold": [1, 2]
+}

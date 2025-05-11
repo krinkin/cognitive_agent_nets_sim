@@ -3,3 +3,4 @@ networkx
 pytest
 pytest-asyncio
 tqdm
+pandas
