@@ -120,10 +120,10 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
         while not done_event.is_set() and (time.time() - start_time) < duration:
             await asyncio.sleep(0.1)
             elapsed = min(time.time() - start_time, duration)
-            pbar.n = elapsed
+            pbar.n = round(elapsed, 2)  # Round to 2 decimal places for cleaner display
             pbar.refresh()
             if done_event.is_set():
-                pbar.n = duration
+                pbar.n = round(duration, 2)
                 pbar.refresh()
                 break
     finally:
