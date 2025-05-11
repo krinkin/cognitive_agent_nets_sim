@@ -1,5 +1,6 @@
 # runner.py  ────────────────────────────────────────────────────────────────
-import argparse, asyncio, json, os, time
+import argparse, asyncio, json, os, time, datetime
+from tqdm import tqdm
 from agents import (
     GeneratorAgent,
     CheckerAgent,
@@ -106,11 +107,21 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
     tasks = [asyncio.create_task(a.run()) for a in agents]
 
     # ── Run until success or timeout ──
+    start_time = time.time()
+    pbar = tqdm(total=duration, desc=f"Simulation {name}", unit="sec", leave=False)
     try:
-        await asyncio.wait_for(done_event.wait(), timeout=duration)
-    except asyncio.TimeoutError:
-        pass
+        # We'll update progress bar every 0.1 seconds
+        while not done_event.is_set() and (time.time() - start_time) < duration:
+            await asyncio.sleep(0.1)
+            elapsed = min(time.time() - start_time, duration)
+            pbar.n = elapsed
+            pbar.refresh()
+            if done_event.is_set():
+                pbar.n = duration
+                pbar.refresh()
+                break
     finally:
+        pbar.close()
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -147,6 +158,10 @@ def main():
     ap.add_argument("--logdir", required=True, help="Directory for logs")
     args = ap.parse_args()
 
+    start_time = datetime.datetime.now()
+    config_name = os.path.basename(args.config).replace(".json", "")
+    print(f"\nStarting simulation with config '{config_name}' at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
     with open(args.config) as f:
         cfg = json.load(f)
 
@@ -159,30 +174,40 @@ def main():
         cfg["sessions"] = 3
 
     # Baseline (без человека)
-    paths_a = [
-        loop.run_until_complete(
+    print("Running baseline simulations...")
+    paths_a = []
+    for i in tqdm(range(cfg["sessions"]), desc="Baseline", unit="session"):
+        path = loop.run_until_complete(
             run_once(cfg, f"baseline_{i}", args.logdir, include_human=False)
         )
-        for i in range(cfg["sessions"])
-    ]
+        paths_a.append(path)
 
     # Hybrid (с Synthetic-Human)
-    paths_b = [
-        loop.run_until_complete(
+    print("Running hybrid simulations...")
+    paths_b = []
+    for i in tqdm(range(cfg["sessions"]), desc="Hybrid", unit="session"):
+        path = loop.run_until_complete(
             run_once(cfg, f"hybrid_{i}", args.logdir, include_human=True)
         )
-        for i in range(cfg["sessions"])
-    ]
+        paths_b.append(path)
 
     Sa, Ta, Ba = analyse(paths_a)
     Sb, Tb, Bb = analyse(paths_b)
 
-    print(f"Baseline  success: {Sa:.3f}")
-    print(f"Hybrid    success: {Sb:.3f}")
-    print(f"Baseline  T_succ : {Ta}")
-    print(f"Hybrid    T_succ : {Tb}")
-    print(f"Baseline  bytes  : {Ba}")
-    print(f"Hybrid    bytes  : {Bb}")
+    end_time = datetime.datetime.now()
+    elapsed = (end_time - start_time).total_seconds()
+
+    print("\n" + "="*50)
+    print(f"SIMULATION RESULTS (completed in {elapsed:.1f} seconds)")
+    print("="*50)
+    print(f"{'Metric':<15} | {'Baseline':<14} | {'Hybrid':<14}")
+    print("-"*50)
+    print(f"{'Success Rate':<15} | {Sa:.3f}{' '*10} | {Sb:.3f}{' '*10}")
+    ta_str = f"{Ta:.2f} sec" if Ta is not None else "N/A"
+    tb_str = f"{Tb:.2f} sec" if Tb is not None else "N/A"
+    print(f"{'Time to Success':<15} | {ta_str:<14} | {tb_str:<14}")
+    print(f"{'Bytes Exchanged':<15} | {Ba:.1f}{' '*10} | {Bb:.1f}{' '*10}")
+    print("="*50)
 
 if __name__ == "__main__":
     main()

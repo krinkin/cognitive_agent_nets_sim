@@ -2,3 +2,4 @@ numpy
 networkx
 pytest
 pytest-asyncio
+tqdm
