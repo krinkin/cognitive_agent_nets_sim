@@ -13,18 +13,19 @@ else
     CONTAINER_CODE_DIR=/app
     HOST_RESULTS_DIR=./results
     CONTAINER_RESULTS_DIR=/app/logs
-    DOCKER_RUN_OPTS="--rm -v ${HOST_CODE_DIR}:${CONTAINER_CODE_DIR} -e LOGDIR=${CONTAINER_RESULTS_DIR}"
+    # Resource limits: 20 CPUs and 32GB memory
+    DOCKER_RUN_OPTS="--rm -v ${HOST_CODE_DIR}:${CONTAINER_CODE_DIR} -e LOGDIR=${CONTAINER_RESULTS_DIR} --cpus=20 --memory=32g --memory-swap=33g"
 fi
 
 # Print usage if no arguments provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 [build|test|run|grid|custom-grid <file>]"
+    echo "Usage: $0 [build|test|run|grid <file>|mini-grid|fast-grid|custom-grid <file>]"
     echo ""
     echo "Commands:"
     echo "  build               - Build the Docker image"
     echo "  test                - Run the test suite"
     echo "  run                 - Run a regular simulation with progress bar"
-    echo "  grid                - Run full parameter grid search"
+    echo "  grid <file>         - Run grid search with specified grid file"
     echo "  mini-grid           - Run small grid for quick testing"
     echo "  fast-grid           - Run optimized grid search with max parallelism"
     echo "  custom-grid <file>  - Run grid search with specified grid file"
@@ -33,6 +34,7 @@ if [ $# -eq 0 ]; then
     echo "  $0 build            # Build the Docker image"
     echo "  $0 test             # Run all tests"
     echo "  $0 run              # Run a regular simulation"
+    echo "  $0 grid grid_params.json  # Run grid search with specified grid file"
     echo "  $0 custom-grid my_grid.json  # Run grid search with custom parameters"
     exit 1
 fi
@@ -59,10 +61,31 @@ case $CMD in
         docker run ${DOCKER_RUN_OPTS} ${DOCKER_IMAGE} regular $@
         ;;
     grid)
-        echo "Running grid search"
+        if [ $# -eq 0 ]; then
+            echo "Error: grid requires a grid file parameter"
+            echo "Usage: $0 grid <grid-file.json>"
+            exit 1
+        fi
+
+        GRID_FILE=$1
+        shift # Remove grid file argument
+
+        # Check if file exists
+        if [ ! -f "${GRID_FILE}" ]; then
+            echo "Error: Grid file not found: ${GRID_FILE}"
+            exit 1
+        fi
+
+        # Get absolute path for the grid file
+        GRID_FILE_ABS=$(realpath ${GRID_FILE})
+        CONTAINER_GRID_PATH="${CONTAINER_CODE_DIR}/$(basename ${GRID_FILE_ABS})"
+
+        echo "Running grid search with grid file: ${GRID_FILE}"
+        echo "Container grid path: ${CONTAINER_GRID_PATH}"
+
         # Ensure host results directory exists
         mkdir -p ${HOST_RESULTS_DIR}
-        docker run ${DOCKER_RUN_OPTS} ${DOCKER_IMAGE} grid $@
+        docker run ${DOCKER_RUN_OPTS} ${DOCKER_IMAGE} grid-file ${CONTAINER_GRID_PATH} $@
         ;;
     mini-grid)
         echo "Running mini grid search"
