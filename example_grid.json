@@ -1,0 +1,7 @@
+{
+  "duration": [30, 60],
+  "generator.preferred_digit": [null, 0, 7],
+  "generator.force_semantic": [false, true],
+  "strategist.threshold": [1, 2],
+  "synthetic_human.lifetime": [30, 60]
+}

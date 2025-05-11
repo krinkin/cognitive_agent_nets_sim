@@ -143,18 +143,34 @@ def run_single_config(params):
     
     return result
 
+def load_grid_file(file_path):
+    """Load a grid parameter file.
+
+    Args:
+        file_path: Path to the grid parameter file
+
+    Returns:
+        Dictionary with parameter grid specification
+    """
+    with open(file_path, 'r') as f:
+        return json.load(f)
+
 def run_grid_search(base_config_path, param_grid, logdir, parallel=False, processes=None, grid_parallel=True, grid_processes=None):
     """Run simulations with all combinations of parameters in the grid.
-    
+
     Args:
         base_config_path: Path to base configuration file
-        param_grid: Dictionary of parameters to vary
+        param_grid: Dictionary of parameters to vary or path to grid parameter file
         logdir: Directory to store logs
         parallel: Whether to run simulations in parallel
         processes: Number of processes for simulation parallelism
         grid_parallel: Whether to run grid configurations in parallel
         grid_processes: Number of processes for grid-level parallelism
     """
+    # Handle case where param_grid is a file path instead of a dictionary
+    if isinstance(param_grid, str):
+        param_grid = load_grid_file(param_grid)
+
     # Load the base configuration
     with open(base_config_path) as f:
         base_config = json.load(f)
@@ -250,8 +266,7 @@ def main():
     args = parser.parse_args()
     
     # Load parameter grid
-    with open(args.grid) as f:
-        param_grid = json.load(f)
+    param_grid = load_grid_file(args.grid)
     
     # Run the grid search
     run_grid_search(

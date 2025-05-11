@@ -3,12 +3,41 @@
 
 # Print usage if no arguments provided
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 [test|regular|grid|focused-grid|fast-grid|mini-grid]"
+    echo "Usage: $0 [test|regular|grid|grid-file <file>|fast-grid|mini-grid]"
+    echo ""
+    echo "Modes:"
+    echo "  test         - Run test suite"
+    echo "  regular      - Run single simulation with progress bar"
+    echo "  grid         - Run grid search using grid_params.json"
+    echo "  grid-file <file> - Run grid search using specified grid file"
+    echo "  fast-grid    - Run grid search with max parallelism using focused_grid.json"
+    echo "  mini-grid    - Run small grid for quick testing"
+    echo ""
+    echo "Environment variables:"
+    echo "  LOGDIR       - Directory to save logs (default: /app/logs)"
+    echo ""
+    echo "Docker examples:"
+    echo "  docker run --rm can_poc test"
+    echo "  docker run --rm can_poc grid"
+    echo "  docker run --rm -v \$(pwd)/results:/app/logs can_poc mini-grid"
+    echo "  docker run --rm -v \$(pwd):/app -e LOGDIR=/app/results can_poc grid-file /app/my_grid.json"
     exit 1
 fi
 
 MODE=$1
 shift  # Remove the mode argument, leaving any additional args
+
+# Handle grid-file mode which requires an additional argument
+GRID_FILE=""
+if [ "$MODE" = "grid-file" ]; then
+    if [ $# -eq 0 ]; then
+        echo "Error: grid-file mode requires a file path"
+        echo "Usage: $0 grid-file <path-to-grid-file>"
+        exit 1
+    fi
+    GRID_FILE="$1"
+    shift  # Remove the grid file argument from remaining args
+fi
 
 case $MODE in
     test)
@@ -17,6 +46,12 @@ case $MODE in
     regular)
         LOGDIR=${LOGDIR:-/app/logs}  # Use LOGDIR env var if set
         python runner.py --config config_a.json --logdir "$LOGDIR" --parallel "$@"
+        ;;
+    grid-file)
+        # Use custom grid file specified by user
+        LOGDIR=${LOGDIR:-/app/logs}  # Use LOGDIR env var if set
+        echo "Running grid search with custom grid file: $GRID_FILE"
+        python grid_runner.py --config config_a.json --logdir "$LOGDIR" --grid "$GRID_FILE" --parallel "$@"
         ;;
     grid)
         LOGDIR=${LOGDIR:-/app/logs}  # Use LOGDIR env var if set
