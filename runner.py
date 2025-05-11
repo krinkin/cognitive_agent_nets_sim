@@ -148,11 +148,32 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
             pbar.set_postfix({"status": "⚠ Timeout"})
 
         pbar.close()
-        for t in tasks:
-            t.cancel()
 
-        # Gracefully cancel and wait for tasks to clean up
+        # Send EXIT message to all agents for graceful shutdown
+        broadcast("EXIT")
+
+        # Give agents a moment to process the EXIT message
+        await asyncio.sleep(0.1)
+
+        # Then cancel any remaining tasks
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+
+        # Then wait for all tasks to complete with return_exceptions=True
+        # to properly handle CancelledError exceptions
         await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Make sure all tasks are truly done
+        for t in tasks:
+            if not t.done():
+                try:
+                    # Set a timeout to prevent hanging if a task won't terminate
+                    await asyncio.wait_for(t, timeout=0.5)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
+
+        # Now it's safe to close the log
         close()  # flush + close the log
 
     return log_path

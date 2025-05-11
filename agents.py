@@ -12,6 +12,7 @@ class BaseAgent:
       • inbox             – asyncio.Queue for incoming strings
       • broadcast         – callable(str): sends a message to all agents
       • done_event        – asyncio.Event() which Strategist sets on CONFIRM
+      • exit_event        - asyncio.Event() which is set when EXIT message is received
     """
 
     def __init__(self,
@@ -22,21 +23,52 @@ class BaseAgent:
         self.inbox         = asyncio.Queue()
         self.broadcast     = broadcast
         self.done_event    = done_event
+        self.exit_event    = asyncio.Event()
 
     async def run(self):
         """Main coroutine: subclasses override `loop` for custom work."""
         loop_task = asyncio.create_task(self.loop())
+
         try:
-            await self.done_event.wait()          # stop when Strategist says so
+            # Simply wait for done_event which is set by the Strategist
+            await self.done_event.wait()
         finally:
-            loop_task.cancel()
+            # Signal exit
+            self.exit_event.set()
+
+            # Put an EXIT message in the inbox to break any waiting recv() calls
+            self.inbox.put_nowait("EXIT")
+
+            # Cancel the loop task if it's still running
+            if not loop_task.done():
+                loop_task.cancel()
+
+            # Wait for the task to complete with a timeout
+            try:
+                # Use shield to prevent cancellation from propagating to the wait_for
+                await asyncio.wait_for(asyncio.shield(loop_task), timeout=0.5)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass  # Expected during cancellation
 
     # -- helpers ------------------------------------------------------------- #
     async def send(self, text: str):
         self.broadcast(text)
 
     async def recv(self) -> str:
-        return await self.inbox.get()
+        """
+        Receive a message from the inbox.
+        Raises:
+            asyncio.CancelledError: If the agent is being terminated
+            SystemExit: If an EXIT message is received
+        """
+        msg = await self.inbox.get()
+
+        # Check for EXIT message and raise SystemExit to stop loops
+        if msg == "EXIT":
+            self.exit_event.set()
+            raise SystemExit("Agent shutting down")
+
+        return msg
 
     # -- to be implemented in subclasses ------------------------------------ #
     async def loop(self):
@@ -72,7 +104,7 @@ class GeneratorAgent(BaseAgent):
     # ----------------------------
     async def loop(self):
         try:
-            while True:
+            while not self.exit_event.is_set():
                 # propose new (or buffered) code
                 if not self.buffer:
                     self.buffer = [self._random_code()
@@ -96,12 +128,17 @@ class GeneratorAgent(BaseAgent):
                             # Insert at beginning so it's used soon
                             self.buffer.insert(0, suggested_code)
                 except asyncio.TimeoutError:
+                    # Check if we should exit
+                    if self.exit_event.is_set():
+                        break
+                    # Brief sleep to yield control
+                    await asyncio.sleep(0.001)
                     continue
-                except asyncio.CancelledError:
-                    # Properly handle task cancellation
+                except (asyncio.CancelledError, SystemExit):
+                    # Exit on cancellation or system exit
                     break
-        except asyncio.CancelledError:
-            # Ensure clean task cancellation
+        except (asyncio.CancelledError, SystemExit):
+            # Ensure clean exit
             pass
 
 
@@ -120,9 +157,19 @@ def _semantic_constraint(code: str) -> bool:
 class CheckerAgent(BaseAgent):
     async def loop(self):
         try:
-            while True:
+            while not self.exit_event.is_set():
                 try:
-                    msg = await self.recv()
+                    # Add timeout to make cancellation more responsive
+                    try:
+                        msg = await asyncio.wait_for(self.recv(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        # Check if we should exit
+                        if self.exit_event.is_set():
+                            break
+                        # Brief yield to event loop
+                        await asyncio.sleep(0.001)
+                        continue
+
                     if msg.startswith("PROPOSE"):
                         _, code, sender = msg.split()
                         is_ok = (_formal_constraints(code) and
@@ -131,10 +178,10 @@ class CheckerAgent(BaseAgent):
                         await self.send(f"EVAL {code} {verdict} {self.name}")
                         if is_ok:
                             await self.send(f"ENDORSE {code} {self.name}")
-                except asyncio.CancelledError:
-                    # Handle cancellation of recv
+                except (asyncio.CancelledError, SystemExit):
+                    # Exit loop on cancellation or system exit
                     break
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, SystemExit):
             # Ensure clean task cancellation
             pass
 
@@ -169,9 +216,28 @@ class StrategistAgent(BaseAgent):
     # ----------------------------
     async def loop(self):
         try:
-            while True:
+            while not self.exit_event.is_set():
                 try:
-                    msg = await self.recv()
+                    # Add timeout to make cancellation more responsive
+                    try:
+                        msg = await asyncio.wait_for(self.recv(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        # Check if we should exit
+                        if self.exit_event.is_set():
+                            break
+
+                        # Still run the periodical human ping
+                        if self.include_human and self.cycle % self.human_interval == 0:
+                            top = sorted(self.endorsements.items(),
+                                     key=lambda kv: -len(kv[1]))[: self.top_k]
+                            codes = ' '.join(c for c, _ in top)
+                            if codes:
+                                await self.send(f"TOP {codes} {self.name}")
+                        self.cycle += 1
+                        # Brief yield to event loop
+                        await asyncio.sleep(0.001)
+                        continue
+
                     parts = msg.split()
 
                     if parts[0] == "EVAL":
@@ -196,10 +262,10 @@ class StrategistAgent(BaseAgent):
                         if codes:
                             await self.send(f"TOP {codes} {self.name}")
                     self.cycle += 1
-                except asyncio.CancelledError:
-                    # Handle cancellation of recv
+                except (asyncio.CancelledError, SystemExit):
+                    # Exit loop on cancellation or system exit
                     break
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, SystemExit):
             # Ensure clean task cancellation
             pass
 
@@ -215,12 +281,25 @@ class SyntheticHumanAgent(BaseAgent):
 
     async def loop(self):
         try:
-            while True:
+            while not self.exit_event.is_set():
                 try:
                     # stop after lifetime seconds
                     if time.time() - self.start_ts > self.lifetime:
-                        await asyncio.sleep(999)
-                    msg = await self.recv()
+                        # Just note that we're no longer active, but keep handling messages
+                        # to ensure proper shutdown
+                        await asyncio.sleep(0.5)
+                        continue
+
+                    # Set a timeout to allow periodic checking of lifetime
+                    try:
+                        msg = await asyncio.wait_for(self.recv(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        # Check if we should exit
+                        if self.exit_event.is_set():
+                            break
+                        # Brief yield to event loop
+                        await asyncio.sleep(0.001)
+                        continue
                     if msg.startswith("TOP"):
                         _, *codes, sender = msg.split()
                         # endorse first code that has 07
@@ -236,9 +315,9 @@ class SyntheticHumanAgent(BaseAgent):
                             code = ''.join(digits)
                             # Use SUGGEST message to send directly to GeneratorAgent
                             await self.send(f"SUGGEST {code} {self.name}")
-                except asyncio.CancelledError:
-                    # Handle cancellation of recv
+                except (asyncio.CancelledError, SystemExit):
+                    # Exit on cancellation or system exit
                     break
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, SystemExit):
             # Ensure clean task cancellation
             pass
