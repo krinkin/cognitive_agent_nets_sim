@@ -83,12 +83,15 @@ class GeneratorAgent(BaseAgent):
                  preferred_digit: Optional[str],
                  force_semantic: bool,
                  buffer_size: int,
+                 focus_influence_probability: float = 0.5,
                  **base_kwargs):
         super().__init__(**base_kwargs)
         self.preferred_digit = preferred_digit
         self.force_semantic  = force_semantic
         self.buffer_size     = buffer_size
+        self.focus_influence_probability = focus_influence_probability
         self.buffer: List[str] = []
+        self.focus_hint: Optional[str] = None
 
     # ----------------------------
     def _random_code(self) -> str:
@@ -97,7 +100,25 @@ class GeneratorAgent(BaseAgent):
             pos = random.randrange(3)
             digits = [random.choice('0123456789') for _ in range(4)]
             digits[pos], digits[pos + 1] = '0', '7'
+            
+            # Apply focus hint if available
+            if self.focus_hint and random.random() < self.focus_influence_probability:
+                # Find a position that's not part of the "07" segment
+                available_positions = [i for i in range(4) if i != pos and i != pos + 1]
+                if available_positions:
+                    focus_pos = random.choice(available_positions)
+                    digits[focus_pos] = self.focus_hint
+                    
             return ''.join(digits)
+            
+        # For non-semantic mode
+        if self.focus_hint and random.random() < self.focus_influence_probability:
+            # Create a code with at least one occurrence of the focus digit
+            pos = random.randrange(4)
+            digits = [random.choice('0123456789') for _ in range(4)]
+            digits[pos] = self.focus_hint
+            return ''.join(digits)
+            
         return ''.join(random.choice('0123456789')
                        for _ in range(4))
 
@@ -127,6 +148,12 @@ class GeneratorAgent(BaseAgent):
                         if sender == "H" and suggested_code not in self.buffer:
                             # Insert at beginning so it's used soon
                             self.buffer.insert(0, suggested_code)
+                    elif msg.startswith("FOCUS_HINT"):
+                        _, hint_digit, sender = msg.split()
+                        # Update our focus hint
+                        self.focus_hint = hint_digit
+                        # Clear buffer to start generating new codes with focus hint
+                        self.buffer = []
                 except asyncio.TimeoutError:
                     # Check if we should exit
                     if self.exit_event.is_set():
@@ -195,12 +222,21 @@ class StrategistAgent(BaseAgent):
                  include_human: bool,
                  human_interval: int,
                  top_k: int,
+                 focus_hint_interval: int = 10,
+                 focus_hint_top_n_codes: int = 3,
+                 focus_min_occurrences: int = 2,
                  **base_kwargs):
         super().__init__(**base_kwargs)
         self.threshold       = threshold
         self.include_human   = include_human
         self.human_interval  = human_interval
         self.top_k           = top_k
+        
+        # Parameters for the Shared Focus mechanism
+        self.focus_hint_interval = focus_hint_interval
+        self.focus_hint_top_n_codes = focus_hint_top_n_codes
+        self.focus_min_occurrences = focus_min_occurrences
+        self.last_focus_hint_value: Optional[str] = None
 
         self.endorsements: Dict[str, Set[str]] = defaultdict(set)
         self.cycle = 0
@@ -212,6 +248,39 @@ class StrategistAgent(BaseAgent):
         if len(votes) >= self.threshold:
             asyncio.create_task(self.send(f"CONFIRM {code}"))
             self.done_event.set()
+            
+    # ----------------------------
+    async def _generate_and_send_focus_hint(self):
+        """
+        Analyze top codes and identify frequently occurring digits
+        to send as a focus hint to guide agent behavior.
+        """
+        if not self.endorsements:
+            return  # No codes to analyze yet
+            
+        # Get top N codes with the most endorsements
+        top_codes = sorted(self.endorsements.items(), 
+                          key=lambda kv: -len(kv[1]))[:self.focus_hint_top_n_codes]
+        
+        if not top_codes:
+            return
+            
+        # Count digit occurrences across top codes
+        digit_counts = defaultdict(int)
+        for code, _ in top_codes:
+            for digit in code:
+                digit_counts[digit] += 1
+                
+        # Find the most common digit that meets minimum occurrence threshold
+        most_common_digits = sorted(digit_counts.items(), key=lambda kv: -kv[1])
+        
+        for digit, count in most_common_digits:
+            if count >= self.focus_min_occurrences:
+                # Don't send the same hint twice in a row
+                if digit != self.last_focus_hint_value:
+                    await self.send(f"FOCUS_HINT {digit} {self.name}")
+                    self.last_focus_hint_value = digit
+                break
 
     # ----------------------------
     async def loop(self):
@@ -233,6 +302,11 @@ class StrategistAgent(BaseAgent):
                             codes = ' '.join(c for c, _ in top)
                             if codes:
                                 await self.send(f"TOP {codes} {self.name}")
+                        
+                        # Periodically generate and send a focus hint
+                        if self.cycle % self.focus_hint_interval == 0:
+                            await self._generate_and_send_focus_hint()
+                            
                         self.cycle += 1
                         # Brief yield to event loop
                         await asyncio.sleep(0.001)
