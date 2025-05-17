@@ -146,6 +146,8 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
     finally:
         if not success and pbar.n >= duration - 0.1:
             pbar.set_postfix({"status": "⚠ Timeout"})
+            # Log timeout event with actual duration elapsed
+            log("session_end", status="timeout", duration_actual=pbar.n)
 
         pbar.close()
 
@@ -200,10 +202,23 @@ def run_simulation(params):
     return log_path
 
 # ───────────────────────────── Aggregation ─────────────────────────────── #
-def analyse(paths):
+def analyse(paths, config_duration):
     succ, deltas, bytes_total = 0, [], []
+    session_durations = []
+    p_rates_per_session = []
+    c_rates_per_session = []
+    r_can_per_session = []
+    
+    # Constants for RCAN calculation
+    k = 1.0
+    epsilon = 1e-6
+    
     for p in paths:
         t0 = None
+        session_successful = False
+        session_duration_actual = config_duration  # Default duration if timeout
+        session_bytes = []
+        
         with open(p) as f:
             for line in f:
                 ev = json.loads(line)
@@ -213,13 +228,44 @@ def analyse(paths):
                     txt = ev["text"]
                     if txt.startswith("CONFIRM") and t0 is not None:
                         succ += 1
-                        deltas.append(ev["t"] - t0)
-                    bytes_total.append(len(txt))
-
-    S = succ / len(paths)
+                        session_successful = True
+                        session_duration_actual = ev["t"] - t0
+                        deltas.append(session_duration_actual)
+                    session_bytes.append(len(txt))
+                elif ev["event"] == "session_end" and ev.get("status") == "timeout" and t0 is not None:
+                    session_duration_actual = ev["duration_actual"]
+        
+        # Store session duration
+        session_durations.append(session_duration_actual)
+        
+        # Calculate P_rate (Progress Rate) for this session
+        if session_successful:
+            p_rate = 1.0 / session_duration_actual
+        else:
+            p_rate = 0.0
+        p_rates_per_session.append(p_rate)
+        
+        # Calculate C_rate (Communication Cost Rate) for this session
+        total_bytes = sum(session_bytes)
+        bytes_total.append(total_bytes)
+        c_rate = total_bytes / session_duration_actual if session_duration_actual > 0 else float('inf')
+        c_rates_per_session.append(c_rate)
+        
+        # Calculate RCAN for this session
+        r_can = k * (p_rate / (c_rate + epsilon))
+        r_can_per_session.append(r_can)
+    
+    # Calculate average metrics
+    S = succ / len(paths) if len(paths) > 0 else 0
     T = None if not deltas else sum(deltas) / len(deltas)
-    B = sum(bytes_total) / len(paths)
-    return S, T, B
+    B = sum(bytes_total) / len(paths) if len(paths) > 0 else 0
+    
+    # Calculate average P_rate, C_rate, and RCAN
+    avg_P_rate = sum(p_rates_per_session) / len(paths) if len(paths) > 0 else 0
+    avg_C_rate = sum(c_rates_per_session) / len(paths) if len(paths) > 0 else 0
+    avg_R_CAN = sum(r_can_per_session) / len(paths) if len(paths) > 0 else 0
+    
+    return S, T, B, avg_P_rate, avg_C_rate, avg_R_CAN
 
 # ─────────────────────── Run complete simulation set ─────────────────────── #
 def run_simulations(config, logdir, parallel=False, processes=None):
@@ -320,20 +366,22 @@ def run_simulations(config, logdir, parallel=False, processes=None):
     return paths_a, paths_b
 
 # ─────────────────────── Display simulation results ────────────────────── #
-def display_results(baseline_paths, hybrid_paths, start_time=None):
+def display_results(baseline_paths, hybrid_paths, config_duration, start_time=None):
     """
     Analyze and display simulation results.
     
     Args:
         baseline_paths: Paths to baseline simulation logs
         hybrid_paths: Paths to hybrid simulation logs
+        config_duration: Duration from configuration for timeout calculations
         start_time: Optional start time for elapsed time calculation
     
     Returns:
-        (Sa, Ta, Ba, Sb, Tb, Bb): Tuple of metrics
+        (Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN, 
+         Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN): Tuple of all metrics
     """
-    Sa, Ta, Ba = analyse(baseline_paths)
-    Sb, Tb, Bb = analyse(hybrid_paths)
+    Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN = analyse(baseline_paths, config_duration)
+    Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN = analyse(hybrid_paths, config_duration)
     
     # Calculate elapsed time if start_time provided
     elapsed = None
@@ -344,19 +392,23 @@ def display_results(baseline_paths, hybrid_paths, start_time=None):
     else:
         elapsed_str = ""
     
-    print("\n" + "="*50)
+    print("\n" + "="*60)
     print(f"SIMULATION RESULTS{elapsed_str}")
-    print("="*50)
-    print(f"{'Metric':<15} | {'Baseline':<14} | {'Hybrid':<14}")
-    print("-"*50)
-    print(f"{'Success Rate':<15} | {Sa:.3f}{' '*10} | {Sb:.3f}{' '*10}")
+    print("="*60)
+    print(f"{'Metric':<20} | {'Baseline':<18} | {'Hybrid':<18}")
+    print("-"*60)
+    print(f"{'Success Rate (S)':<20} | {Sa:.3f}{' '*14} | {Sb:.3f}{' '*14}")
     ta_str = f"{Ta:.2f} sec" if Ta is not None else "N/A"
     tb_str = f"{Tb:.2f} sec" if Tb is not None else "N/A"
-    print(f"{'Time to Success':<15} | {ta_str:<14} | {tb_str:<14}")
-    print(f"{'Bytes Exchanged':<15} | {Ba:.1f}{' '*10} | {Bb:.1f}{' '*10}")
-    print("="*50)
+    print(f"{'Time to Success (T)':<20} | {ta_str:<18} | {tb_str:<18}")
+    print(f"{'Bytes Exchanged (B)':<20} | {Ba:.1f}{' '*14} | {Bb:.1f}{' '*14}")
+    print(f"{'Progress Rate (P̊)':<20} | {baseline_P_rate:.6f}{' '*8} | {hybrid_P_rate:.6f}{' '*8}")
+    print(f"{'Comm Cost Rate (C̊)':<20} | {baseline_C_rate:.2f}{' '*14} | {hybrid_C_rate:.2f}{' '*14}")
+    print(f"{'Resonance (R_CAN)':<20} | {baseline_R_CAN:.6f}{' '*8} | {hybrid_R_CAN:.6f}{' '*8}")
+    print("="*60)
     
-    return Sa, Ta, Ba, Sb, Tb, Bb
+    return (Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN,
+            Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN)
 
 # ────────────────────────────── CLI driver ─────────────────────────────── #
 def main():
@@ -384,7 +436,7 @@ def main():
     )
     
     # Display results
-    display_results(baseline_paths, hybrid_paths, start_time)
+    display_results(baseline_paths, hybrid_paths, cfg["duration"], start_time)
 
 if __name__ == "__main__":
     main()

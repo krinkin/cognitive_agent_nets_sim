@@ -109,9 +109,12 @@ def run_single_config(params):
         processes=processes
     )
     
+    # Extract config duration for timeout calculations
+    config_duration = config["duration"]
+    
     # Analyze results
-    Sa, Ta, Ba = runner.analyse(baseline_paths)
-    Sb, Tb, Bb = runner.analyse(hybrid_paths)
+    Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN = runner.analyse(baseline_paths, config_duration)
+    Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN = runner.analyse(hybrid_paths, config_duration)
     
     # Record the results
     result = {
@@ -122,7 +125,13 @@ def run_single_config(params):
         "baseline_time": Ta,
         "hybrid_time": Tb,
         "baseline_bytes": Ba,
-        "hybrid_bytes": Bb
+        "hybrid_bytes": Bb,
+        "baseline_P_rate": baseline_P_rate,
+        "hybrid_P_rate": hybrid_P_rate,
+        "baseline_C_rate": baseline_C_rate,
+        "hybrid_C_rate": hybrid_C_rate,
+        "baseline_R_CAN": baseline_R_CAN,
+        "hybrid_R_CAN": hybrid_R_CAN
     }
     
     # Add all the parameter values to the result
