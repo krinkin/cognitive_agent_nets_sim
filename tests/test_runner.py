@@ -96,9 +96,10 @@ def test_analyse():
         
         # Set a configuration duration for the test
         config_duration = 60.0  # Default test duration
+        rcan_k = 1024.0  # Default RCAN k coefficient
         
         # Test the analyse function with the config_duration parameter
-        success_rate, avg_time, avg_bytes, p_rate, c_rate, r_can = analyse(log_paths, config_duration)
+        success_rate, avg_time, avg_bytes, p_rate, c_rate, r_can = analyse(log_paths, config_duration, rcan_k)
         
         # Check the analysis results
         assert success_rate == 2/3  # 2 successful confirmations out of 3 sessions
@@ -115,6 +116,8 @@ async def test_run_once():
         # Create a minimal test configuration
         config = {
             "duration": 1,  # Short duration for testing
+            "seed": 42,  # Fixed seed for reproducibility
+            "rcan_k": 1024.0,  # RCAN coefficient
             "generator": {
                 "preferred_digit": None,
                 "force_semantic": True,  # Force semantic constraint to speed up success

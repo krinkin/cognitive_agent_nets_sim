@@ -122,9 +122,12 @@ def run_single_config(params):
     # Extract config duration for timeout calculations
     config_duration = config["duration"]
     
+    # Get RCAN k parameter from config if available
+    rcan_k = config.get("rcan_k", 1024.0)
+    
     # Analyze results
-    Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN = runner.analyse(baseline_paths, config_duration)
-    Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN = runner.analyse(hybrid_paths, config_duration)
+    Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN = runner.analyse(baseline_paths, config_duration, rcan_k)
+    Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN = runner.analyse(hybrid_paths, config_duration, rcan_k)
     
     # Record the results
     result = {
@@ -342,10 +345,22 @@ def main():
     parser.add_argument("--plots-dir", type=str, default=None, 
                         help="Custom directory for visualization plots (default: {logdir}/plots)")
     
+    # RCAN calculation
+    parser.add_argument("--rcan-k", type=float, default=1024.0,
+                        help="Coefficient for RCAN calculation (default: 1024.0)")
+    
     args = parser.parse_args()
     
     # Load parameter grid
     param_grid = load_grid_file(args.grid)
+    
+    # Load base config and add rcan_k if specified via command line
+    with open(args.config) as f:
+        base_config = json.load(f)
+    
+    # Add rcan_k to base_config if specified via command line and not in config
+    if "rcan_k" not in base_config and args.rcan_k is not None:
+        base_config["rcan_k"] = args.rcan_k
     
     # Run the grid search
     results = run_grid_search(

@@ -8,11 +8,11 @@ from typing import Dict, Set, List, Optional, Callable
 class BaseAgent:
     """
     Every agent has:
-      • name              – unique id in the chat
-      • inbox             – asyncio.Queue for incoming strings
-      • broadcast         – callable(str): sends a message to all agents
-      • done_event        – asyncio.Event() which Strategist sets on CONFIRM
-      • exit_event        - asyncio.Event() which is set when EXIT message is received
+      • name               unique id in the chat
+      • inbox              asyncio.Queue for incoming strings
+      • broadcast          callable(str): sends a message to all agents
+      • done_event         asyncio.Event() which Strategist sets on CONFIRM
+      • exit_event         asyncio.Event() which is set when EXIT message is received
     """
 
     def __init__(self,

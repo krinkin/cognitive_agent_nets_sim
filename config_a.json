@@ -2,6 +2,7 @@
   "sessions": 2,
   "duration": 40,
   "seed": 42,
+  "rcan_k": 1024.0,
   "generator": {
     "preferred_digit": 0,
     "force_semantic": false,

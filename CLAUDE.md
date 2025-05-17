@@ -53,6 +53,9 @@ docker build -t can_poc .
 # Run a simulation with progress bars
 ./docker-run.sh run
 
+# Run with custom RCAN coefficient
+./docker-run.sh run --rcan-k 2048.0
+
 # Run grid search (various modes)
 ./docker-run.sh grid
 ./docker-run.sh mini-grid
@@ -72,6 +75,9 @@ docker run --rm -v $(pwd):/app -e LOGDIR=/app/results --cpus=20 --memory=30g --m
 
 # Run with progress visualization
 docker run --rm -v $(pwd):/app -e LOGDIR=/app/results --cpus=20 --memory=30g --memory-swap=31g can_poc regular
+
+# Run with custom RCAN coefficient
+docker run --rm -v $(pwd):/app -e LOGDIR=/app/results --cpus=20 --memory=30g --memory-swap=31g can_poc --rcan-k 2048.0
 
 # Run grid search with custom grid file
 docker run --rm -v $(pwd):/app -e LOGDIR=/app/results --cpus=20 --memory=30g --memory-swap=31g can_poc grid-file /app/my_grid.json
@@ -141,6 +147,21 @@ Agents communicate through message passing with specific formats:
 
 Results compare success rates, time to success, and communication volume between modes.
 
+### Cognitive Resonance Metrics
+
+The system calculates several key metrics to evaluate agent network performance:
+
+1. **Success Rate (S)**: Fraction of sessions that reached consensus
+2. **Time to Success (T)**: Average time to reach consensus
+3. **Bytes Exchanged (B)**: Average communication volume
+4. **Progress Rate (P̊)**: Inverse of time to success
+5. **Communication Cost Rate (C̊)**: Bytes per second
+6. **Cognitive Resonance (R_CAN)**: Defined as `k * (P̊ / (C̊ + ε))` where:
+   - `k` is a scaling coefficient (default: 1024.0)
+   - `ε` is a small constant to prevent division by zero (1e-6)
+
+The R_CAN metric measures how efficiently the network achieves consensus relative to communication costs. Higher values indicate better cognitive resonance.
+
 ## Configuration Options
 
 ### Base Configurations
@@ -164,6 +185,7 @@ To create a custom grid, copy and modify `example_grid.json`.
 - `sessions`: Number of simulation runs
 - `duration`: Maximum runtime per session (seconds)
 - `seed`: Random seed for reproducible simulations (optional, auto-generated if not specified)
+- `rcan_k`: Coefficient for cognitive resonance (RCAN) calculation (default: 1024.0)
 - `generator.force_semantic`: Whether to force "07" in generated codes
 - `generator.preferred_digit`: Digit to prefer in generation (0, 7, or null)
 - `generator.focus_influence_probability`: Probability of using focus hints in code generation

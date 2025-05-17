@@ -212,7 +212,7 @@ def run_simulation(params):
     return log_path
 
 # ───────────────────────────── Aggregation ─────────────────────────────── #
-def analyse(paths, config_duration):
+def analyse(paths, config_duration, rcan_k=1024.0):
     succ, deltas, bytes_total = 0, [], []
     session_durations = []
     p_rates_per_session = []
@@ -220,7 +220,7 @@ def analyse(paths, config_duration):
     r_can_per_session = []
     
     # Constants for RCAN calculation
-    k = 1.0
+    k = rcan_k  # Use the provided value (default 1024.0)
     epsilon = 1e-6
     
     for p in paths:
@@ -376,7 +376,7 @@ def run_simulations(config, logdir, parallel=False, processes=None):
     return paths_a, paths_b
 
 # ─────────────────────── Display simulation results ────────────────────── #
-def display_results(baseline_paths, hybrid_paths, config_duration, start_time=None):
+def display_results(baseline_paths, hybrid_paths, config_duration, start_time=None, rcan_k=None):
     """
     Analyze and display simulation results.
     
@@ -385,13 +385,17 @@ def display_results(baseline_paths, hybrid_paths, config_duration, start_time=No
         hybrid_paths: Paths to hybrid simulation logs
         config_duration: Duration from configuration for timeout calculations
         start_time: Optional start time for elapsed time calculation
+        rcan_k: Optional coefficient for RCAN calculation (default: 1024.0)
     
     Returns:
         (Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN, 
          Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN): Tuple of all metrics
     """
-    Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN = analyse(baseline_paths, config_duration)
-    Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN = analyse(hybrid_paths, config_duration)
+    # Get RCAN k parameter from config if available
+    rcan_k_value = rcan_k if rcan_k is not None else 1024.0
+    
+    Sa, Ta, Ba, baseline_P_rate, baseline_C_rate, baseline_R_CAN = analyse(baseline_paths, config_duration, rcan_k_value)
+    Sb, Tb, Bb, hybrid_P_rate, hybrid_C_rate, hybrid_R_CAN = analyse(hybrid_paths, config_duration, rcan_k_value)
     
     # Calculate elapsed time if start_time provided
     elapsed = None
@@ -428,6 +432,8 @@ def main():
     ap.add_argument("--parallel", action="store_true", help="Run simulations in parallel")
     ap.add_argument("--processes", type=int, default=None, 
                    help="Number of parallel processes (default: CPU count)")
+    ap.add_argument("--rcan-k", type=float, default=None,
+                   help="Coefficient for RCAN calculation (default: 1024.0)")
     args = ap.parse_args()
 
     start_time = datetime.datetime.now()
@@ -436,6 +442,11 @@ def main():
     
     with open(args.config) as f:
         cfg = json.load(f)
+    
+    # Get RCAN k parameter from config or command line
+    rcan_k = args.rcan_k
+    if rcan_k is None and "rcan_k" in cfg:
+        rcan_k = cfg.get("rcan_k")
 
     # Run simulations
     baseline_paths, hybrid_paths = run_simulations(
@@ -446,7 +457,7 @@ def main():
     )
     
     # Display results
-    display_results(baseline_paths, hybrid_paths, cfg["duration"], start_time)
+    display_results(baseline_paths, hybrid_paths, cfg["duration"], start_time, rcan_k)
 
 if __name__ == "__main__":
     main()
