@@ -4,7 +4,15 @@ import asyncio, random
 NASA_MONTH='07'
 
 class SyntheticHuman:
-    """Heuristic human: upvotes codes containing '07' or suggests new ones."""
+    """
+    Enhanced heuristic human agent that upvotes codes containing '07' or suggests 
+    intelligent new ones that follow specific constraints:
+    
+    1. Always includes '07' somewhere in the code
+    2. Ensures the first digit is even when possible
+    3. Avoids repeating digits (especially '0' and '7') when generating the other positions
+    4. Remembers previous suggestions to avoid duplicates
+    """
     def __init__(self, name, inbox, outboxes, log, lifetime=90.0):
         self.name=name
         self.inbox=inbox
@@ -45,23 +53,79 @@ class SyntheticHuman:
                     await self._send('Strategist', f'SCORE {c} +1')
                     return
                     
-            # If no suitable codes found, generate a new suggestion
+            # If no suitable codes found, generate a new intelligent suggestion
             # Try to generate a unique suggestion (not previously suggested)
-            # with a maximum of 3 attempts to avoid infinite loops
-            for _ in range(3):
-                pos = random.randrange(3)          # 07?? | ?07? | ??07
-                digits = list(''.join(random.choices('0123456789', k=4)))
-                digits[pos], digits[pos + 1] = NASA_MONTH[0], NASA_MONTH[1]
-                suggestion = ''.join(digits)
+            # with a maximum of 5 attempts to avoid infinite loops
+            for attempt in range(5):
+                # Step 1: Determine '07' position (07xx, x07x, or xx07)
+                pos = random.randrange(3)
+                # Initialize code list with placeholders
+                code_list = ['X', 'X', 'X', 'X']
+                # Place '0' and '7' at determined position
+                code_list[pos] = NASA_MONTH[0]
+                code_list[pos + 1] = NASA_MONTH[1]
+                
+                # Step 2: Identify placeholder indices (the two 'X' positions)
+                placeholder_indices = [i for i, char in enumerate(code_list) if char == 'X']
+                
+                # Step 3: Generate digits for placeholders
+                # First placeholder
+                idx1 = placeholder_indices[0]
+                if idx1 == 0:  # If this is the first digit of the code
+                    # Choose an even digit for the first position
+                    digit1 = random.choice(['0', '2', '4', '6', '8'])
+                else:
+                    # Any digit except '0' and '7' to avoid immediate repetition
+                    digit1 = random.choice([str(d) for d in range(10) if str(d) not in NASA_MONTH])
+                
+                # Second placeholder
+                idx2 = placeholder_indices[1]
+                
+                # Define pool of available digits for the second placeholder
+                possible_digits_for_d2 = [str(d) for d in range(10)]
+                
+                # Remove digits we want to avoid for the second digit
+                if digit1 in possible_digits_for_d2:
+                    possible_digits_for_d2.remove(digit1)  # Avoid repeating the first random digit
+                
+                # Avoid '0' and '7' unless we're intentionally creating a pair with digit1
+                if NASA_MONTH[0] in possible_digits_for_d2 and NASA_MONTH[0] != digit1:
+                    possible_digits_for_d2.remove(NASA_MONTH[0])
+                if NASA_MONTH[1] in possible_digits_for_d2 and NASA_MONTH[1] != digit1:
+                    possible_digits_for_d2.remove(NASA_MONTH[1])
+                
+                # Fallback if too many constraints
+                if not possible_digits_for_d2:
+                    possible_digits_for_d2 = [str(d) for d in range(10) if str(d) != digit1]
+                    if not possible_digits_for_d2:
+                        possible_digits_for_d2 = [str(random.randint(0, 9))]
+                
+                # Special handling for second digit if it's the first position in the code
+                if idx2 == 0:  # If this placeholder is the first digit
+                    digit2_choices = [d for d in possible_digits_for_d2 if int(d) % 2 == 0]
+                    if not digit2_choices:  # Fallback if no even digit possible
+                        digit2_choices = possible_digits_for_d2
+                    digit2 = random.choice(digit2_choices if digit2_choices else ['0'])  # Fallback to '0'
+                else:
+                    digit2 = random.choice(possible_digits_for_d2)
+                
+                # Place digits into their positions
+                code_list[idx1] = digit1
+                code_list[idx2] = digit2
+                
+                # Form the final suggestion
+                suggestion = ''.join(code_list)
                 
                 # Check if this is a new suggestion
                 if suggestion not in self.suggested_codes:
                     # Add to memory and send
                     self.suggested_codes.add(suggestion)
                     await self._send('Generator', f'SUGGEST {suggestion}')
-                    self.log('suggest', agent=self.name, code=suggestion, is_new=True)
+                    self.log('suggest', agent=self.name, code=suggestion, is_new=True, 
+                             is_intelligent=True, attempt=attempt+1)
                     break
                 else:
                     # Log that we skipped a duplicate suggestion
-                    self.log('suggest', agent=self.name, code=suggestion, is_new=False)
-            # If we tried 3 times and still got duplicates, we don't send any suggestion this round
+                    self.log('suggest', agent=self.name, code=suggestion, is_new=False,
+                             attempt=attempt+1)
+            # If we tried 5 times and still got duplicates, we don't send any suggestion this round
