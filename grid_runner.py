@@ -327,13 +327,18 @@ def main():
     parser.add_argument("--grid-processes", type=int, default=None,
                         help="Number of processes for grid-level parallelism (default: CPU count / 2)")
     
+    # Visualization options
+    parser.add_argument("--visualize", action="store_true", help="Generate visualization plots after simulation")
+    parser.add_argument("--plots-dir", type=str, default=None, 
+                        help="Custom directory for visualization plots (default: {logdir}/plots)")
+    
     args = parser.parse_args()
     
     # Load parameter grid
     param_grid = load_grid_file(args.grid)
     
     # Run the grid search
-    run_grid_search(
+    results = run_grid_search(
         args.config, 
         param_grid, 
         args.logdir, 
@@ -342,6 +347,51 @@ def main():
         grid_parallel=not args.no_grid_parallel,
         grid_processes=args.grid_processes
     )
+    
+    # Generate visualizations if requested
+    if args.visualize:
+        try:
+            import visualize_results
+            import os
+            
+            # Determine the results CSV path
+            # We know the most recent grid directory is in args.logdir with the 'grid_' prefix
+            grid_dirs = [d for d in os.listdir(args.logdir) if d.startswith('grid_')]
+            if grid_dirs:
+                # Sort by modification time to get the most recent
+                most_recent_grid = sorted(grid_dirs, key=lambda d: os.path.getmtime(os.path.join(args.logdir, d)))[-1]
+                csv_path = os.path.join(args.logdir, most_recent_grid, "results.csv")
+                
+                # Set plots directory
+                if args.plots_dir:
+                    plots_dir = args.plots_dir
+                else:
+                    plots_dir = os.path.join(args.logdir, most_recent_grid, "plots")
+                
+                print(f"\nGenerating visualizations from {csv_path}")
+                print(f"Saving plots to {plots_dir}")
+                
+                # Create output directory
+                os.makedirs(plots_dir, exist_ok=True)
+                
+                # Load results
+                df = visualize_results.load_results(csv_path)
+                
+                # Generate plots
+                visualize_results.plot_rcan_comparison(df, plots_dir)
+                visualize_results.plot_progress_vs_cost(df, plots_dir)
+                visualize_results.plot_metric_comparison_scatter(df, plots_dir)
+                visualize_results.plot_ecdf(df, plots_dir)
+                visualize_results.plot_force_semantic_impact(df, plots_dir)
+                visualize_results.plot_lifetime_impact(df, plots_dir)
+                
+                print(f"All plots saved to {plots_dir}")
+            else:
+                print("No grid directories found in logdir, skipping visualization")
+        except ImportError:
+            print("Warning: visualize_results module not found, skipping visualization")
+        except Exception as e:
+            print(f"Error generating visualizations: {e}")
 
 if __name__ == "__main__":
     main()
