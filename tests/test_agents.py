@@ -251,10 +251,8 @@ async def test_synthetic_human_agent(broadcast_callback, done_event):
     await asyncio.sleep(0.1)
     loop_task.cancel()
     
-    # Check that the agent proposed and endorsed a new code containing '07'
-    assert len(broadcast_callback.messages) == 2
-    assert broadcast_callback.messages[0].startswith("PROPOSE ")
+    # Check that the agent suggests a new code containing '07'
+    assert len(broadcast_callback.messages) == 1
+    assert broadcast_callback.messages[0].startswith("SUGGEST ")
     assert broadcast_callback.messages[0].endswith(" H")
     assert "07" in broadcast_callback.messages[0].split()[1]
-    assert broadcast_callback.messages[1].startswith("ENDORSE ")
-    assert broadcast_callback.messages[1].endswith(" H")

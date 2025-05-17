@@ -94,13 +94,19 @@ def test_analyse():
             f.write(json.dumps({"t": start_time + 3.0, "event": "msg", "text": "CONFIRM 2244"}) + "\n")
         log_paths.append(log_path3)
         
-        # Test the analyse function
-        success_rate, avg_time, avg_bytes = analyse(log_paths)
+        # Set a configuration duration for the test
+        config_duration = 60.0  # Default test duration
+        
+        # Test the analyse function with the config_duration parameter
+        success_rate, avg_time, avg_bytes, p_rate, c_rate, r_can = analyse(log_paths, config_duration)
         
         # Check the analysis results
         assert success_rate == 2/3  # 2 successful confirmations out of 3 sessions
         assert avg_time > 0  # Average time to success should be positive
         assert avg_bytes > 0  # Average byte count should be positive
+        assert p_rate >= 0  # Progress rate should be non-negative
+        assert c_rate >= 0  # Communication cost rate should be non-negative
+        assert r_can >= 0  # Resonance should be non-negative
 
 @pytest.mark.asyncio
 async def test_run_once():
