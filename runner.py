@@ -1,5 +1,5 @@
 # runner.py  ────────────────────────────────────────────────────────────────
-import argparse, asyncio, json, os, time, datetime, multiprocessing, signal
+import argparse, asyncio, json, os, time, datetime, multiprocessing, signal, random
 from multiprocessing import Pool
 from tqdm import tqdm
 from agents import (
@@ -53,9 +53,19 @@ def init_worker():
 
 # ───────────────────────────── One session ─────────────────────────────── #
 async def run_once(config: dict, name: str, logdir: str, include_human: bool):
+    # Set random seed for reproducibility if specified
+    seed = config.get("seed")
+    if seed is not None:
+        random.seed(seed)
+        log_seed = seed
+    else:
+        # Use a random seed if not specified
+        log_seed = random.randint(1, 1000000)
+        random.seed(log_seed)
+        
     duration              = config["duration"]
     log, close, log_path  = make_logger(name, logdir)
-    log("start")                               # session start point
+    log("start", seed=log_seed)               # session start point with seed info
 
     done_event            = asyncio.Event()
     agents                = []

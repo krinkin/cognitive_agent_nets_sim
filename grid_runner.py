@@ -5,6 +5,7 @@ import json
 import os
 import datetime
 import itertools
+import hashlib
 from tqdm import tqdm
 import pandas as pd
 import multiprocessing
@@ -65,6 +66,15 @@ def create_grid_configs(base_config, param_grid):
         
         # Create a short but descriptive name for this config
         config_name = "__".join(config_name_parts)
+        
+        # Ensure each configuration in the grid has a seed value for reproducibility
+        if "seed" not in config:
+            # If seed wasn't specified in base_config or param_grid, add a unique seed
+            # based on the config name to ensure reproducibility between runs
+            # Generate a hash of the config_name and use it as the seed
+            seed_hash = hashlib.md5(config_name.encode()).hexdigest()
+            # Convert hash to integer by taking first 8 characters (32 bits)
+            config["seed"] = int(seed_hash[:8], 16)
         
         configs.append((config, config_name))
     
