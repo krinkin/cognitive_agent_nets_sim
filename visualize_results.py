@@ -82,8 +82,8 @@ def plot_rcan_comparison(df, output_dir):
     })
     
     # Create bar chart
-    ax = sns.barplot(x='Configuration', y='Mean RCAN', data=rcan_data, 
-                    palette=['blue', 'orange'])
+    ax = sns.barplot(x='Configuration', y='Mean RCAN', hue='Configuration', data=rcan_data, 
+                    palette=['blue', 'orange'], legend=False)
     
     # Add error bars
     ax.errorbar(x=rcan_data.index, y=rcan_data['Mean RCAN'], 
