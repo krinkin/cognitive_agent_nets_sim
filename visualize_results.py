@@ -15,9 +15,17 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 
-# Set up Seaborn style for better-looking plots
+# Set up Seaborn style for better-looking plots with larger labels
 sns.set_theme(style="whitegrid")
-plt.rcParams.update({'font.size': 12})
+plt.rcParams.update({
+    'font.size': 24,  # Doubled from 12 to 24
+    'axes.labelsize': 24,
+    'axes.titlesize': 24,
+    'xtick.labelsize': 24,
+    'ytick.labelsize': 24,
+    'legend.fontsize': 24,
+    'figure.titlesize': 24
+})
 
 
 def load_results(csv_path):
@@ -72,7 +80,7 @@ def plot_rcan_comparison(df, output_dir):
         df (pd.DataFrame): DataFrame containing simulation results
         output_dir (str): Directory to save the plot
     """
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(20, 12))
     
     # Calculate mean and standard error for baseline and hybrid RCAN
     rcan_data = pd.DataFrame({
@@ -95,7 +103,7 @@ def plot_rcan_comparison(df, output_dir):
     
     # Save plot
     output_path = os.path.join(output_dir, 'rcan_comparison_bar.png')
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path, dpi=600)
     plt.close()
     print(f"Saved plot to {output_path}")
 
@@ -108,7 +116,7 @@ def plot_progress_vs_cost(df, output_dir):
         df (pd.DataFrame): DataFrame containing simulation results
         output_dir (str): Directory to save the plot
     """
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(20, 16))
     
     # Check if we need log scale (if data spans several orders of magnitude)
     baseline_c_range = df['baseline_C_rate'].max() / (df['baseline_C_rate'].min() or 1)
@@ -144,7 +152,7 @@ def plot_progress_vs_cost(df, output_dir):
     
     # Save plot
     output_path = os.path.join(output_dir, 'p_rate_vs_c_rate_scatter.png')
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path, dpi=600)
     plt.close()
     print(f"Saved plot to {output_path}")
 
@@ -182,7 +190,7 @@ def plot_metric_comparison_scatter(df, output_dir):
             print(f"Warning: No valid data for {metric_name} comparison")
             continue
             
-        plt.figure(figsize=(8, 8))
+        plt.figure(figsize=(16, 16))
         
         # Get min and max values for axis limits
         min_val = min(valid_df[baseline_col].min(), valid_df[hybrid_col].min())
@@ -215,7 +223,7 @@ def plot_metric_comparison_scatter(df, output_dir):
         
         # Save plot
         output_path = os.path.join(output_dir, f'{metric_name}_comparison_scatter.png')
-        plt.savefig(output_path, dpi=300)
+        plt.savefig(output_path, dpi=600)
         plt.close()
         print(f"Saved plot to {output_path}")
 
@@ -241,7 +249,7 @@ def plot_ecdf(df, output_dir):
         baseline_col = f'baseline_{metric_name}'
         hybrid_col = f'hybrid_{metric_name}'
         
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(20, 12))
         
         # For time, only include successful runs
         if metric_name == 'time':
@@ -274,7 +282,7 @@ def plot_ecdf(df, output_dir):
         
         # Save plot
         output_path = os.path.join(output_dir, f'{metric_name}_ecdf.png')
-        plt.savefig(output_path, dpi=300)
+        plt.savefig(output_path, dpi=600)
         plt.close()
         print(f"Saved plot to {output_path}")
 
@@ -316,7 +324,7 @@ def plot_force_semantic_impact(df, output_dir):
     width = 0.35
     
     # Create grouped bar chart
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(20, 12))
     baseline_bars = ax.bar(x - width/2, baseline_means, width, label='Baseline', color='blue', yerr=baseline_errors, capsize=5)
     hybrid_bars = ax.bar(x + width/2, hybrid_means, width, label='Hybrid', color='orange', yerr=hybrid_errors, capsize=5)
     
@@ -336,7 +344,7 @@ def plot_force_semantic_impact(df, output_dir):
                         xy=(bar.get_x() + bar.get_width() / 2, height),
                         xytext=(0, 3),  # 3 points vertical offset
                         textcoords="offset points",
-                        ha='center', va='bottom', fontsize=9)
+                        ha='center', va='bottom', fontsize=18)
     
     add_labels(baseline_bars)
     add_labels(hybrid_bars)
@@ -345,7 +353,7 @@ def plot_force_semantic_impact(df, output_dir):
     
     # Save plot
     output_path = os.path.join(output_dir, 'rcan_by_force_semantic.png')
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path, dpi=600)
     plt.close()
     print(f"Saved plot to {output_path}")
 
@@ -363,7 +371,7 @@ def plot_lifetime_impact(df, output_dir):
         print("Warning: 'synthetic_human.lifetime' column not found. Skipping lifetime impact plots.")
         return
     
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(20, 12))
     
     # Group by lifetime and calculate mean and standard error
     grouped = df.groupby('synthetic_human.lifetime')
@@ -405,13 +413,14 @@ def plot_lifetime_impact(df, output_dir):
         plt.annotate(f'{hybrid_rcan_means[i]:.4f}',
                     xy=(lifetimes[i], hybrid_rcan_means[i]),
                     xytext=(5, 5),  # 5 points offset
-                    textcoords="offset points")
+                    textcoords="offset points",
+                    fontsize=18)
     
     plt.tight_layout()
     
     # Save plot
     output_path = os.path.join(output_dir, 'hybrid_rcan_by_lifetime.png')
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path, dpi=600)
     plt.close()
     print(f"Saved plot to {output_path}")
     
@@ -422,7 +431,7 @@ def plot_lifetime_impact(df, output_dir):
     ]
     
     for metric_name, metric_label in metrics:
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(20, 12))
         hybrid_metric_col = f'hybrid_{metric_name}'
         
         # Group by lifetime and calculate mean and standard error
@@ -465,13 +474,14 @@ def plot_lifetime_impact(df, output_dir):
             plt.annotate(f'{hybrid_metric_means[i]:.4f}',
                         xy=(lifetimes[i], hybrid_metric_means[i]),
                         xytext=(5, 5),  # 5 points offset
-                        textcoords="offset points")
+                        textcoords="offset points",
+                        fontsize=18)
         
         plt.tight_layout()
         
         # Save plot
         output_path = os.path.join(output_dir, f'hybrid_{metric_name.lower()}_by_lifetime.png')
-        plt.savefig(output_path, dpi=300)
+        plt.savefig(output_path, dpi=600)
         plt.close()
         print(f"Saved plot to {output_path}")
 
