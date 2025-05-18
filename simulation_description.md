@@ -1,4 +1,4 @@
-# Cognitive Agent Network (CAN) Simulation
+# Cognitive Agent Network Simulation
 
 ## Overview
 
@@ -124,27 +124,16 @@ A key innovation in this simulation is the Shared Focus mechanism, which enables
 
 The system calculates several key metrics to evaluate the performance of the agent network:
 
-### 1. Success Rate (S)
-Fraction of simulation sessions that successfully reached consensus.
+| Metric | Symbol | Description |
+|--------|--------|-------------|
+| Success Rate | S | Fraction of simulation sessions that successfully reached consensus |
+| Time to Success | T | Average time (in seconds) required to reach consensus; only calculated for successful sessions |
+| Bytes Exchanged | B | Average communication volume (in bytes) across all sessions |
+| Progress Rate | P̊ | Inverse of time to success (1/T); higher values indicate faster solution finding |
+| Communication Cost Rate | C̊ | Bytes per second during simulation; measures communication efficiency |
+| Cognitive Resonance | R_CAN | Primary metric defined as `k * (P̊ / (C̊ + ε))` |
 
-### 2. Time to Success (T)
-Average time (in seconds) required to reach consensus. Only calculated for successful sessions.
-
-### 3. Bytes Exchanged (B)
-Average communication volume (in bytes) across all sessions.
-
-### 4. Progress Rate (P̊)
-Defined as the inverse of time to success (1/T). Higher values indicate faster solution finding.
-
-### 5. Communication Cost Rate (C̊)
-Bytes per second during the simulation. Measures communication efficiency.
-
-### 6. Cognitive Resonance (R_CAN)
-The primary metric, defined as:
-```
-R_CAN = k * (P̊ / (C̊ + ε))
-```
-Where:
+The R_CAN metric uses the following parameters:
 - `k` is a scaling coefficient (default: 1024.0)
 - `ε` is a small constant (1e-6) to prevent division by zero
 
@@ -201,7 +190,7 @@ All operations are designed to run within Docker for consistent execution enviro
 
 ## Cognitive Agent Network Theory
 
-This simulation implementation is based on the Cognitive Agent Network theory outlined in the AGI-2025 paper, which proposes that:
+This simulation implementation is based on the Cognitive Agent Network theory outlined in the paper, which proposes that:
 
 1. Multiple agents with complementary capabilities can achieve emergent cognitive properties
 2. Human-AI collaboration can significantly enhance problem-solving efficiency
