@@ -13,7 +13,7 @@ from agents import (
 def make_logger(session: str, logdir: str, batch: int = 500):
     os.makedirs(logdir, exist_ok=True)
     path = os.path.join(logdir, f"{session}.jsonl")
-    fh   = open(path, "w", buffering=1024 * 1024)       # 1 MiB buffer
+    fh   = open(path, "w", buffering=1024 * 1024)  # Use 1 MiB buffer for better performance
 
     buf, closed = [], False
 
@@ -24,7 +24,7 @@ def make_logger(session: str, logdir: str, batch: int = 500):
 
     def log(event: str, **data):
         nonlocal closed
-        if closed:               # file is already closed → ignore write
+        if closed:               # file is already closed - ignore write
             return
         buf.append(
             json.dumps(
@@ -193,8 +193,7 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
 # ────────────────── Run single simulation in a process ────────────────── #
 def run_simulation(params):
     """
-    Run a single simulation in a separate process.
-    This function is called by the multiprocessing pool.
+    Run a single simulation in a separate process for multiprocessing.
     """
     config, session_name, logdir, include_human = params
 
@@ -248,7 +247,7 @@ def analyse(paths, config_duration, rcan_k=1024.0):
         # Store session duration
         session_durations.append(session_duration_actual)
         
-        # Calculate P_rate (Progress Rate) for this session
+        # Calculate Progress Rate (inverse of time to success)
         if session_successful:
             p_rate = 1.0 / session_duration_actual
         else:

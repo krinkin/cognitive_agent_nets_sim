@@ -31,8 +31,6 @@ def create_grid_configs(base_config, param_grid):
         param_paths.append(key.split('.'))
         param_values.append(values)
     
-    # param_paths and param_values are already lists
-    
     configs = []
     
     # For each combination of parameter values

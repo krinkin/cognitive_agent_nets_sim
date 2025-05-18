@@ -36,7 +36,7 @@ class BaseAgent:
             # Signal exit
             self.exit_event.set()
 
-            # Put an EXIT message in the inbox to break any waiting recv() calls
+            # Signal any waiting recv() calls to exit
             self.inbox.put_nowait("EXIT")
 
             # Cancel the loop task if it's still running
@@ -57,13 +57,14 @@ class BaseAgent:
     async def recv(self) -> str:
         """
         Receive a message from the inbox.
+        
         Raises:
             asyncio.CancelledError: If the agent is being terminated
             SystemExit: If an EXIT message is received
         """
         msg = await self.inbox.get()
 
-        # Check for EXIT message and raise SystemExit to stop loops
+        # Handle EXIT message by raising SystemExit
         if msg == "EXIT":
             self.exit_event.set()
             raise SystemExit("Agent shutting down")
@@ -173,7 +174,7 @@ class GeneratorAgent(BaseAgent):
 #  Checker                                                                    #
 # --------------------------------------------------------------------------- #
 def _formal_constraints(code: str) -> bool:
-    # Example rules — replace with your own if needed
+    # Formal constraints for valid codes
     even_first      = int(code[0]) % 2 == 0
     exactly_two_rep = any(code.count(d) == 2 for d in set(code))
     return even_first and exactly_two_rep

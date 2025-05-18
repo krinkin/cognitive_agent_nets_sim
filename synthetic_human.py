@@ -6,20 +6,21 @@ NASA_MONTH='07'
 class SyntheticHuman:
     """
     Enhanced heuristic human agent that upvotes codes containing '07' or suggests 
-    intelligent new ones that follow specific constraints:
+    intelligent new ones that follow specific constraints.
     
-    1. Always includes '07' somewhere in the code
-    2. Ensures the first digit is even when possible
-    3. Avoids repeating digits (especially '0' and '7') when generating the other positions
-    4. Remembers previous suggestions to avoid duplicates
+    Features:
+    - Always includes '07' somewhere in the code
+    - Ensures the first digit is even when possible
+    - Avoids repeating digits (especially '0' and '7') when generating other positions
+    - Remembers previous suggestions to avoid duplicates
     """
     def __init__(self, name, inbox, outboxes, log, lifetime=90.0):
-        self.name=name
-        self.inbox=inbox
-        self.outboxes=outboxes
-        self.log=log
-        self.lifetime=lifetime
-        self.t0=None
+        self.name = name              # Agent identifier
+        self.inbox = inbox            # Queue for incoming messages
+        self.outboxes = outboxes      # Mapping of agent names to output queues
+        self.log = log                # Logger function
+        self.lifetime = lifetime      # Duration the agent remains active (seconds)
+        self.t0 = None                # Start time (set when agent begins running)
         self.suggested_codes = set()  # Memory to store previously suggested codes
 
     async def _send(self, recipient, msg):

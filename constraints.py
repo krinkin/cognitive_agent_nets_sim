@@ -17,8 +17,9 @@ def semantic_contains_nasa_month(code: str) -> bool:
 
 SEMANTIC = [semantic_contains_nasa_month]
 
-# ---------- sample *two* formal + one semantic ----------
+# ---------- sample constraints ----------
 def sample_constraints():
-    formal1, formal2 = random.sample(FORMAL, 2)   # ← k = 2
+    # Select two formal constraints and one semantic constraint
+    formal1, formal2 = random.sample(FORMAL, 2)   # Select 2 formal constraints
     semantic         = random.choice(SEMANTIC)
     return (formal1, formal2, semantic)
