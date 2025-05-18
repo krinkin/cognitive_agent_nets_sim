@@ -102,6 +102,7 @@ async def run_once(config: dict, name: str, logdir: str, include_human: bool):
             include_human=include_human,
             human_interval=s["human_interval"],
             top_k=s["top_k"],
+            enable_shared_focus=s.get("enable_shared_focus", True),
             name="S",
             broadcast=broadcast,
             done_event=done_event,
@@ -433,6 +434,8 @@ def main():
                    help="Number of parallel processes (default: CPU count)")
     ap.add_argument("--rcan-k", type=float, default=None,
                    help="Coefficient for RCAN calculation (default: 1024.0)")
+    ap.add_argument("--enable-shared-focus", action="store_true", 
+                   help="Enable the shared focus mechanism")
     args = ap.parse_args()
 
     start_time = datetime.datetime.now()
@@ -446,6 +449,12 @@ def main():
     rcan_k = args.rcan_k
     if rcan_k is None and "rcan_k" in cfg:
         rcan_k = cfg.get("rcan_k")
+        
+    # Apply shared focus override if specified
+    if args.enable_shared_focus and "strategist" in cfg:
+        if "enable_shared_focus" not in cfg["strategist"]:
+            print("Adding enable_shared_focus parameter to config")
+        cfg["strategist"]["enable_shared_focus"] = True
 
     # Run simulations
     baseline_paths, hybrid_paths = run_simulations(

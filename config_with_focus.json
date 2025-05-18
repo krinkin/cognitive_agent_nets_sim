@@ -13,7 +13,7 @@
     "threshold": 2,
     "human_interval": 6,
     "top_k": 10,
-    "enable_shared_focus": false,
+    "enable_shared_focus": true,
     "focus_hint_interval": 10,
     "focus_hint_top_n_codes": 3,
     "focus_min_occurrences": 2

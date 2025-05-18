@@ -21,6 +21,7 @@ docker run --rm can_poc mini-grid         # Run small grid search
 docker run --rm can_poc grid              # Run full parameter grid search
 docker run --rm can_poc fast-grid         # Run optimized grid search with max parallelism
 docker run --rm can_poc grid-file /app/my_grid.json  # Custom grid file
+docker run --rm can_poc regular --enable-shared-focus  # Run with shared focus mechanism
 ```
 
 ### Using the Docker Helper Script
@@ -44,6 +45,9 @@ For simplified Docker usage, we provide a convenient wrapper script:
 
 # Run with custom grid file
 ./docker-run.sh custom-grid my_grid.json
+
+# Run with shared focus mechanism enabled
+./run-with-focus.sh
 ```
 
 The script automatically:

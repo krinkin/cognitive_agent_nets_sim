@@ -65,6 +65,7 @@ The simulation implements a multi-agent system with distinct roles:
 - `include_human`: Whether to include human agent in the loop
 - `human_interval`: How often to send top codes to human (in cycles)
 - `top_k`: Number of top codes to send to human
+- `enable_shared_focus`: Whether to enable the shared focus mechanism (default: false)
 - `focus_hint_interval`: Cycles between sending focus hints
 - `focus_hint_top_n_codes`: Number of top codes to analyze for focus hints
 - `focus_min_occurrences`: Minimum occurrences of a digit to be considered for a focus hint
@@ -119,6 +120,8 @@ A key innovation in this simulation is the Shared Focus mechanism, which enables
 2. When a digit appears with sufficient frequency, it's broadcast as a focus hint
 3. The Generator uses these hints to bias its code generation toward patterns that have shown promise
 4. This creates a feedback loop that accelerates convergence on valid solutions
+
+This mechanism is disabled by default and can be enabled by setting the `enable_shared_focus` parameter to `true` to evaluate how this coordination mechanism affects performance.
 
 ## Cognitive Resonance Metrics
 

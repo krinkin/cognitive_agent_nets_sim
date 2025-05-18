@@ -226,6 +226,7 @@ class StrategistAgent(BaseAgent):
                  focus_hint_interval: int = 10,
                  focus_hint_top_n_codes: int = 3,
                  focus_min_occurrences: int = 2,
+                 enable_shared_focus: bool = False,
                  **base_kwargs):
         super().__init__(**base_kwargs)
         self.threshold       = threshold
@@ -234,6 +235,7 @@ class StrategistAgent(BaseAgent):
         self.top_k           = top_k
         
         # Parameters for the Shared Focus mechanism
+        self.enable_shared_focus = enable_shared_focus
         self.focus_hint_interval = focus_hint_interval
         self.focus_hint_top_n_codes = focus_hint_top_n_codes
         self.focus_min_occurrences = focus_min_occurrences
@@ -304,8 +306,8 @@ class StrategistAgent(BaseAgent):
                             if codes:
                                 await self.send(f"TOP {codes} {self.name}")
                         
-                        # Periodically generate and send a focus hint
-                        if self.cycle % self.focus_hint_interval == 0:
+                        # Periodically generate and send a focus hint if enabled
+                        if self.enable_shared_focus and self.cycle % self.focus_hint_interval == 0:
                             await self._generate_and_send_focus_hint()
                             
                         self.cycle += 1

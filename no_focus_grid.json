@@ -1,0 +1,8 @@
+{
+  "duration": [40, 60],
+  "rcan_k": [1024.0],
+  "generator.preferred_digit": [0, 7],
+  "generator.force_semantic": [false, true],
+  "strategist.enable_shared_focus": [false, true],
+  "synthetic_human.lifetime": [60, 90]
+}
