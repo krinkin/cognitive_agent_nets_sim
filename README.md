@@ -1,7 +1,7 @@
 
 # Cognitive Agent Network 
 
-Minimal reproducible prototype for the AGI‑2025 paper.
+Minimal reproducible prototype for the AGI‑2025 paper. (TBD: Link to paper will be available as soon as it is published)
 
 ## Docker (Required)
 
