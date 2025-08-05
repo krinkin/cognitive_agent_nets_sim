@@ -1,5 +1,5 @@
 
-# Cognitive Agent Network (Hybrid PoC)
+# Cognitive Agent Network 
 
 Minimal reproducible prototype for the AGI‑2025 paper.
 
